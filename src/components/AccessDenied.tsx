@@ -1,0 +1,1 @@
+export function AccessDenied() { return <section className="placeholder access-denied"><small>PERMISSION REQUIRED</small><h1>Access Denied</h1><p>Your account does not have permission to open this area.</p></section> }
