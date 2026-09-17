@@ -41,7 +41,7 @@ export function ConnectionIndicator() {
 
   return (
     <div
-      className={`pos-connection-badge ${isOnline ? 'online' : 'offline'}`}
+      className={`pos-connection-badge no-print ${isOnline ? 'online' : 'offline'}`}
       title={isOnline ? 'System is connected to internet' : 'System is currently offline'}
     >
       <span className="connection-dot" />
@@ -66,7 +66,7 @@ export function PwaUpdatePrompt() {
   if (!needRefresh) return null
 
   return (
-    <div className="pwa-update-banner" role="alert">
+    <div className="pwa-update-banner no-print" role="alert">
       <div className="pwa-update-content">
         <span className="pwa-update-icon">⚡</span>
         <div>
@@ -162,7 +162,7 @@ export function PwaInstallPrompt() {
   }
 
   return (
-    <div className="pwa-install-banner">
+    <div className="pwa-install-banner no-print">
       <div className="pwa-install-info">
         <img src="/logo2.jpeg" alt="ZTech POS" className="pwa-install-logo" />
         <div className="pwa-install-text">
@@ -221,7 +221,7 @@ export function InstallAppButton() {
 
   if (isInstalled) {
     return (
-      <div className="pwa-installed-badge" title="Running in standalone application mode">
+      <div className="pwa-installed-badge no-print" title="Running in standalone application mode">
         <span>✓ App Installed</span>
       </div>
     )
@@ -245,7 +245,7 @@ export function InstallAppButton() {
     <>
       <button
         type="button"
-        className="sidebar-install-btn"
+        className="sidebar-install-btn no-print"
         onClick={handleClick}
         title="Install ZTech POS on your computer or device"
       >
@@ -254,7 +254,7 @@ export function InstallAppButton() {
       </button>
 
       {showGuide && (
-        <div className="pwa-guide-modal-backdrop" onClick={() => setShowGuide(false)}>
+        <div className="pwa-guide-modal-backdrop no-print" onClick={() => setShowGuide(false)}>
           <div className="pwa-guide-modal" onClick={(e) => e.stopPropagation()}>
             <div className="pwa-guide-header">
               <img src="/logo2.jpeg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '6px' }} />

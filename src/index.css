@@ -4334,6 +4334,15 @@ button {
   .settings-page,
   .prices-page:not(.reports-page),
   .subscription-warning-banner,
+  .subscription-banner,
+  .pwa-update-banner,
+  .pwa-install-banner,
+  .pwa-guide-modal-backdrop,
+  .pwa-guide-modal,
+  .pos-connection-badge,
+  .pwa-installed-badge,
+  .sidebar-install-btn,
+  .app-container > :not(.app),
   .no-print,
   .receipt-success-banner,
   .receipt-modal-actions,
@@ -4344,6 +4353,9 @@ button {
   .app-header {
     display: none !important;
     visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* 2. RESET CONTAINERS TO PURE UNWRAPPED FLOW */

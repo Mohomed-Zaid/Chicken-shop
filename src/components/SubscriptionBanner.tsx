@@ -33,7 +33,7 @@ export function SubscriptionBanner() {
   }
 
   return (
-    <div className={`subscription-warning-banner ${daysRemaining <= 2 ? 'urgent' : ''}`}>
+    <div className={`subscription-warning-banner no-print ${daysRemaining <= 2 ? 'urgent' : ''}`}>
       <div className="banner-content">
         <span className="banner-icon">⚠️</span>
         <span className="banner-text">{message}</span>
