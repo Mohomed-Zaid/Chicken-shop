@@ -68,27 +68,90 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
 
 
 export const fetchNextInvoiceNumber = async (): Promise<string> => {
+  let maxExistingNum = 0
+
+  // 1. Check local sequence and local records
   const localSeq = Number(localStorage.getItem('sales-invoice-sequence') || '0')
+  if (localSeq > maxExistingNum) {
+    maxExistingNum = localSeq
+  }
+
+  try {
+    const rawLocalSales = localStorage.getItem('sales-transactions')
+    if (rawLocalSales) {
+      const parsed = JSON.parse(rawLocalSales) as Array<{ invoiceNumber?: string }>
+      for (const s of parsed) {
+        if (s.invoiceNumber) {
+          const digits = s.invoiceNumber.replace(/\D/g, '')
+          if (digits) {
+            const val = parseInt(digits, 10)
+            if (!isNaN(val) && val > maxExistingNum) {
+              maxExistingNum = val
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore local parse error
+  }
+
   try {
     const db = requireSupabase()
-    
-    // 1. Try atomic database sequence RPC first
+
+    // 2. Query the highest existing invoice numbers in Supabase database
+    const { data: latestSales } = await db
+      .from('sales')
+      .select('invoice_number')
+      .order('sold_at', { ascending: false })
+      .limit(100)
+
+    if (latestSales && latestSales.length > 0) {
+      for (const row of latestSales) {
+        if (row.invoice_number) {
+          const digits = row.invoice_number.replace(/\D/g, '')
+          if (digits) {
+            const val = parseInt(digits, 10)
+            if (!isNaN(val) && val > maxExistingNum) {
+              maxExistingNum = val
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Try database sequence RPC
     const rpcRes = await db.rpc('next_invoice_number')
     if (!rpcRes.error && rpcRes.data) {
       const inv = String(rpcRes.data)
-      const match = inv.match(/(\d+)$/)
-      if (match) {
-        localStorage.setItem('sales-invoice-sequence', match[1])
-      }
-      return inv
-    }
-  } catch {
-    // Continue to fallback
-  }
+      const digits = inv.replace(/\D/g, '')
+      const rpcVal = digits ? parseInt(digits, 10) : 0
 
-  const nextLocal = localSeq + 1
-  localStorage.setItem('sales-invoice-sequence', String(nextLocal))
-  return `INV-${String(nextLocal).padStart(6, '0')}`
+      // Only use the RPC invoice if it is strictly greater than all known existing invoices
+      if (rpcVal > maxExistingNum) {
+        localStorage.setItem('sales-invoice-sequence', String(rpcVal))
+        return inv
+      }
+    }
+
+    // If RPC was <= maxExistingNum (sequence behind), advance past highest existing invoice
+    const nextNum = maxExistingNum + 1
+    localStorage.setItem('sales-invoice-sequence', String(nextNum))
+
+    // Attempt to sync database sequence to prevent future lag
+    try {
+      await db.rpc('sync_invoice_number_sequence', { last_value: nextNum })
+    } catch {
+      // Ignore RPC error if not defined
+    }
+
+    return `INV-${String(nextNum).padStart(6, '0')}`
+  } catch {
+    // Fallback if network/db error
+    const nextNum = maxExistingNum + 1
+    localStorage.setItem('sales-invoice-sequence', String(nextNum))
+    return `INV-${String(nextNum).padStart(6, '0')}`
+  }
 }
 
 export const saveSale = async (sale: Sale) => {
@@ -178,8 +241,13 @@ export const completeSaleAtomically = async (
 
     const res = await db.rpc('complete_sale', { sale_payload: payload })
     if (!res.error) {
+      // In case database generated or formatted the invoice_number:
+      const returnedPayload = res.data as { invoice_number?: string } | null
+      const actualInvoice = returnedPayload?.invoice_number || currentSale.invoiceNumber
+      const updatedSale = { ...currentSale, invoiceNumber: actualInvoice }
+
       // Sync local sequence counter with successfully saved invoice
-      const match = currentSale.invoiceNumber?.match(/(\d+)$/)
+      const match = actualInvoice?.match(/(\d+)$/)
       if (match) {
         const num = parseInt(match[1], 10)
         const currentLocal = Number(localStorage.getItem('sales-invoice-sequence') || '0')
@@ -187,10 +255,10 @@ export const completeSaleAtomically = async (
           localStorage.setItem('sales-invoice-sequence', String(num))
         }
       }
-      return { data: res.data, error: null, finalSale: currentSale }
+      return { data: res.data, error: null, finalSale: updatedSale }
     }
 
-    // If duplicate key on invoice_number constraint occurs, generate fresh next invoice number and retry
+    // If duplicate key on invoice_number constraint occurs, find the highest existing number and jump above it
     const errorString = `${res.error.message || ''} ${res.error.details || ''} ${res.error.hint || ''} ${res.error.code || ''}`
     if (
       res.error.code === '23505' ||
@@ -198,11 +266,37 @@ export const completeSaleAtomically = async (
       errorString.includes('duplicate key') ||
       errorString.includes('unique constraint')
     ) {
-      // Advance local counter by 1 before re-querying to avoid re-collision
-      const currentSeq = Number(localStorage.getItem('sales-invoice-sequence') || '0')
-      localStorage.setItem('sales-invoice-sequence', String(currentSeq + 1))
+      let maxDbNum = 0
+      try {
+        const { data: dbSales } = await db
+          .from('sales')
+          .select('invoice_number')
+          .order('sold_at', { ascending: false })
+          .limit(100)
+        if (dbSales) {
+          for (const s of dbSales) {
+            const digits = (s.invoice_number || '').replace(/\D/g, '')
+            if (digits) {
+              const val = parseInt(digits, 10)
+              if (val > maxDbNum) maxDbNum = val
+            }
+          }
+        }
+      } catch {
+        // Continue
+      }
 
-      const nextInv = await fetchNextInvoiceNumber()
+      const currentSeq = Number(localStorage.getItem('sales-invoice-sequence') || '0')
+      const targetSeq = Math.max(maxDbNum, currentSeq) + 1 + attempt
+      localStorage.setItem('sales-invoice-sequence', String(targetSeq))
+
+      try {
+        await db.rpc('sync_invoice_number_sequence', { last_value: targetSeq })
+      } catch {
+        // Continue
+      }
+
+      const nextInv = `INV-${String(targetSeq).padStart(6, '0')}`
       currentSale = {
         ...currentSale,
         id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
