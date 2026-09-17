@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react'
 import { calculateChickenPrice, formatMoney, findChickenByCode, type ChickenCartItem, type ChickenItem } from '../data/chicken'
 import { groceryStore, type GroceryProduct } from '../data/grocery'
-import { salesStore, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
+import { salesStore, toLocalDateString, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
 import { movementStore } from '../data/purchases'
 import { ReceiptPreview } from './Receipt'
 import { storageAdapter } from '../services/storageAdapter'
@@ -499,7 +499,7 @@ export function PosPayment({
       let sale: Sale = {
         id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         invoiceNumber: initialInvoice,
-        date: new Date().toISOString().slice(0, 10),
+        date: toLocalDateString(),
         time: new Date().toLocaleTimeString(),
         items,
         subtotal: total,

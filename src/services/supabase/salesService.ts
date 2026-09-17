@@ -7,14 +7,28 @@ export const getSaleItems = () => listRows('sale_items')
 export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
   try {
     const db = requireSupabase()
+    let salesData: any[] | null = null
     const { data, error } = await db
       .from('sales')
       .select('*, sale_items(*)')
       .order('sold_at', { ascending: false })
 
-    if (error || !data) return []
+    if (error || !data) {
+      if (error) console.warn('Supabase sales query with items failed, trying fallback:', error)
+      const fallback = await db
+        .from('sales')
+        .select('*')
+        .order('sold_at', { ascending: false })
+      if (!fallback.error && fallback.data) {
+        salesData = fallback.data
+      } else {
+        return []
+      }
+    } else {
+      salesData = data
+    }
 
-    return data.map(row => {
+    return salesData.map(row => {
       const soldAtDate = row.sold_at ? new Date(row.sold_at) : new Date()
       const rawItems = (row.sale_items || []) as Array<{
         id?: string
@@ -41,10 +55,15 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         total: Number(si.total || 0),
       }))
 
+      const year = soldAtDate.getFullYear()
+      const month = String(soldAtDate.getMonth() + 1).padStart(2, '0')
+      const day = String(soldAtDate.getDate()).padStart(2, '0')
+      const localDateStr = `${year}-${month}-${day}`
+
       return {
         id: row.id,
         invoiceNumber: row.invoice_number,
-        date: row.sold_at ? row.sold_at.slice(0, 10) : soldAtDate.toISOString().slice(0, 10),
+        date: localDateStr,
         time: soldAtDate.toLocaleTimeString(),
         items,
         subtotal: Number(row.subtotal || 0),

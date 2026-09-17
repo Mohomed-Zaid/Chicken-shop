@@ -62,7 +62,20 @@ export default function App() {
         ])
 
         if (cloudSales && cloudSales.length > 0) {
-          localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+          const rawLocal = localStorage.getItem('sales-transactions')
+          let localSales: any[] = []
+          try { localSales = rawLocal ? JSON.parse(rawLocal) : [] } catch { localSales = [] }
+          const salesMap = new Map<string, any>()
+          cloudSales.forEach(s => salesMap.set(s.id, s))
+          localSales.forEach(s => {
+            if (s && s.id && !salesMap.has(s.id)) salesMap.set(s.id, s)
+          })
+          const merged = Array.from(salesMap.values()).sort((a, b) => {
+            const dateA = new Date(`${a.date} ${a.time || '00:00:00'}`).getTime()
+            const dateB = new Date(`${b.date} ${b.time || '00:00:00'}`).getTime()
+            return dateB - dateA
+          })
+          localStorage.setItem('sales-transactions', JSON.stringify(merged))
         }
 
         if (cloudProducts && cloudProducts.length > 0) {

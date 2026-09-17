@@ -6,7 +6,13 @@ import { formatMoney } from '../data/chicken'
 
 export type DateRange = { start: string; end: string; label: string }
 export type DashboardSnapshot = ReturnType<typeof getDashboardSnapshot>
-const iso = (date: Date) => date.toISOString().slice(0, 10)
+const localDate = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const iso = (date: Date) => localDate(date)
 const startOfToday = () => { const date = new Date(); date.setHours(0, 0, 0, 0); return date }
 export function getDateRange(filter: string, customStart?: string, customEnd?: string): DateRange {
   const today = startOfToday(); const end = iso(today); const start = new Date(today)

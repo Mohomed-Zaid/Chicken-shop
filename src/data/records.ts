@@ -5,13 +5,24 @@ export interface SaleTransaction { id:string; invoiceNumber:string; date:string;
 export type Sale = SaleTransaction
 const sk='sales-transactions',ik='sales-invoice-sequence'
 const read=<T,>(k:string,d:T):T=>{try{return JSON.parse(localStorage.getItem(k)||'')as T}catch{return d}}
-const today=()=>new Date().toISOString().slice(0,10)
+export const toLocalDateString = (d: Date = new Date()): string => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const today = () => toLocalDateString()
+const notifySale = (s?: Sale) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('sales_updated', { detail: s }))
+  }
+}
 export const salesStore={
 	get:()=>read<Sale[]>(sk,[]),
 	getSales:()=>read<Sale[]>(sk,[]),
-	saveSale:(s:Sale)=>localStorage.setItem(sk,JSON.stringify([s,...salesStore.get()])),
-	save:(s:Sale)=>localStorage.setItem(sk,JSON.stringify([s,...salesStore.get()])),
-	removeSale:(id:string)=>localStorage.setItem(sk,JSON.stringify(salesStore.get().filter(x=>x.id!==id))),
+	saveSale:(s:Sale)=>{localStorage.setItem(sk,JSON.stringify([s,...salesStore.get().filter(x=>x.id!==s.id)])); notifySale(s)},
+	save:(s:Sale)=>{localStorage.setItem(sk,JSON.stringify([s,...salesStore.get().filter(x=>x.id!==s.id)])); notifySale(s)},
+	removeSale:(id:string)=>{localStorage.setItem(sk,JSON.stringify(salesStore.get().filter(x=>x.id!==id))); notifySale()},
 	getSaleById:(id:string)=>salesStore.get().find(x=>x.id===id),
 	getTodaySales:()=>salesStore.get().filter(x=>x.status==='completed'&&x.date===today()).reduce((a,x)=>a+x.total,0),
 	getTodayBillCount:()=>salesStore.get().filter(x=>x.status==='completed'&&x.date===today()).length,

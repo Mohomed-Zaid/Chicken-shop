@@ -4,6 +4,7 @@ import { getDashboardSnapshot, getDateRange, type DashboardSnapshot } from '../s
 import { storageAdapter } from '../services/storageAdapter'
 import { fetchSalesFromSupabase } from '../services/supabase/salesService'
 import { LiveDateTime } from './dashboard/LiveDateTime'
+import { SalesChart } from './dashboard/SalesChart'
 
 type Props = { onInventory?: () => void; isAdmin?: boolean }
 
@@ -30,7 +31,26 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
       if (storageAdapter.isSupabase()) {
         const cloudSales = await fetchSalesFromSupabase()
         if (cloudSales && cloudSales.length > 0) {
-          localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+          const rawLocal = localStorage.getItem('sales-transactions')
+          let localSales: any[] = []
+          try {
+            localSales = rawLocal ? JSON.parse(rawLocal) : []
+          } catch {
+            localSales = []
+          }
+          const salesMap = new Map<string, any>()
+          cloudSales.forEach(s => salesMap.set(s.id, s))
+          localSales.forEach(s => {
+            if (s && s.id && !salesMap.has(s.id)) {
+              salesMap.set(s.id, s)
+            }
+          })
+          const merged = Array.from(salesMap.values()).sort((a, b) => {
+            const dateA = new Date(`${a.date} ${a.time || '00:00:00'}`).getTime()
+            const dateB = new Date(`${b.date} ${b.time || '00:00:00'}`).getTime()
+            return dateB - dateA
+          })
+          localStorage.setItem('sales-transactions', JSON.stringify(merged))
         }
       }
       setSnapshot(getDashboardSnapshot(getDateRange(filter)))
@@ -44,6 +64,18 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setSnapshot(getDashboardSnapshot(getDateRange(filter)))
+    }
+    window.addEventListener('sales_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('sales_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [filter])
 
   if (loading) {
     return (
@@ -63,8 +95,6 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
       </section>
     )
   }
-
-  const maxTrend = Math.max(...snapshot.trend.map(item => Math.max(item.sales, item.expenses)), 1)
 
   return (
     <section className="prices-page dashboard-page">
@@ -130,31 +160,12 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
         />
       </div>
 
+      {/* Modern Interactive Sales Analytics Chart */}
+      <SalesChart isAdmin={isAdmin} />
+
       {isAdmin ? (
         <>
           <div className="dashboard-columns">
-            <section className="bi-panel">
-              <header>
-                <h2>Sales vs Expenses</h2>
-                <span>Last 7 days</span>
-              </header>
-              <div className="trend-chart">
-                {snapshot.trend.map(item => (
-                  <div className="trend-day" key={item.date}>
-                    <div className="trend-bars">
-                      <i style={{ height: `${(item.sales / maxTrend) * 100}%` }} />
-                      <em style={{ height: `${(item.expenses / maxTrend) * 100}%` }} />
-                    </div>
-                    <small>{item.label}</small>
-                  </div>
-                ))}
-              </div>
-              <div className="chart-legend">
-                <span><i />Sales</span>
-                <span><em />Expenses</span>
-              </div>
-            </section>
-
             <section className="bi-panel">
               <header>
                 <h2>Payment Breakdown</h2>
