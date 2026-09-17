@@ -3911,6 +3911,83 @@ button {
   margin: 2px 0 0;
 }
 
+.bill-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-hold-bill {
+  border: 1px solid #3c4f62;
+  background: #233342;
+  color: #e4edf3;
+  font-weight: 800;
+  padding: 6px 11px;
+  border-radius: 5px;
+  font-size: 11px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-hold-bill:hover:not(:disabled) {
+  background: #2d4153;
+  color: #ffffff;
+  border-color: #f3b625;
+}
+
+.btn-hold-bill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-held-list {
+  border: 1px solid #3c4f62;
+  background: #233342;
+  color: #e4edf3;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-held-list:hover {
+  background: #2d4153;
+  color: #ffffff;
+  border-color: #f3b625;
+}
+
+.btn-held-list.has-held {
+  border-color: #e8aa15;
+  background: #263327;
+  color: #fef08a;
+  box-shadow: 0 0 10px rgba(232, 170, 21, 0.15);
+}
+
+.held-count-badge {
+  background: #374758;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.btn-held-list.has-held .held-count-badge {
+  background: #f3b625;
+  color: #101820;
+  box-shadow: 0 0 6px rgba(243, 182, 37, 0.6);
+}
+
 .btn-new-bill {
   border: 1px solid #3c4f62;
   background: #233342;
@@ -3920,6 +3997,7 @@ button {
   border-radius: 5px;
   font-size: 11px;
   transition: all 0.15s ease;
+  cursor: pointer;
 }
 
 .btn-new-bill:hover {
@@ -4163,7 +4241,43 @@ button {
   color: #f3b625;
 }
 
+.pos-bill-actions-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.pos-btn-hold-action {
+  height: 52px;
+  padding: 0 16px;
+  border-radius: 6px;
+  border: 1px solid #3c4f62;
+  background: #1c2b3a;
+  color: #e2ecf5;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pos-btn-hold-action:hover:not(:disabled) {
+  background: #25394d;
+  color: #ffffff;
+  border-color: #f3b625;
+}
+
+.pos-btn-hold-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .pos-btn-pay {
+  flex: 1;
   height: 52px;
   border-radius: 6px;
   border: 0;
@@ -5347,4 +5461,283 @@ button {
   padding: 2px 7px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
+}
+
+/* ==========================================================================
+   POS HOLD / PARK ORDERS STYLES
+   ========================================================================== */
+
+/* Hold Confirm Modal */
+.hold-modal-dialog {
+  max-width: 480px;
+}
+
+.btn-confirm-hold {
+  background: #f3b625 !important;
+  color: #101820 !important;
+  font-weight: 900 !important;
+}
+
+.hold-items-preview {
+  margin-top: 14px;
+  background: #0e1722;
+  border: 1px solid #233547;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.hold-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.hold-item-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #d1dfeb;
+  padding: 4px 0;
+  border-bottom: 1px dashed #1d2d3e;
+}
+
+.hold-item-line:last-child {
+  border-bottom: none;
+}
+
+.hold-item-line b {
+  color: #f3b625;
+  font-weight: 800;
+}
+
+/* Held Orders Manager Modal */
+.held-orders-dialog {
+  max-width: 680px;
+  width: 95vw;
+}
+
+.held-orders-body {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.held-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.held-order-card {
+  background: #172433;
+  border: 1px solid #2b3d50;
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: all 0.15s ease;
+}
+
+.held-order-card:hover {
+  border-color: #3b536d;
+  background: #1a293a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.held-order-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.held-order-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.held-order-ref-badge {
+  background: #25394d;
+  color: #f3b625;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.held-order-time {
+  font-size: 12px;
+  color: #8fa2b4;
+}
+
+.held-order-cashier {
+  font-size: 11px;
+  color: #697d8e;
+}
+
+.held-order-total {
+  font-size: 18px;
+  font-weight: 900;
+  color: #f3b625;
+  white-space: nowrap;
+}
+
+.held-order-note {
+  margin-top: 8px;
+  background: #0d1620;
+  border-left: 3px solid #f3b625;
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  color: #c2d4e2;
+}
+
+.held-order-note span {
+  color: #7b92a4;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.held-order-items-snippet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.held-item-chip {
+  font-size: 11px;
+  background: #101924;
+  border: 1px solid #273748;
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: #cbd8e4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.held-item-chip small {
+  color: #f3b625;
+  font-weight: 800;
+}
+
+.held-order-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #223242;
+}
+
+.btn-held-resume {
+  background: #e8aa15;
+  color: #101820;
+  border: 0;
+  font-weight: 900;
+  font-size: 12px;
+  border-radius: 5px;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-held-resume:hover {
+  background: #fbbd24;
+  transform: translateY(-1px);
+}
+
+.btn-held-delete {
+  background: transparent;
+  color: #f87171;
+  border: 1px solid #4a2828;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-held-delete:hover {
+  background: #7f1d1d;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn-danger-subtle {
+  background: transparent;
+  color: #fca5a5;
+  border: 1px solid #5a2c2c;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger-subtle:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+/* Collision Resolution Modal */
+.collision-dialog {
+  max-width: 500px;
+}
+
+.collision-info-box {
+  background: #0e1722;
+  border: 1px solid #233547;
+  border-radius: 6px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d1dfeb;
+}
+
+.collision-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-collision-discard {
+  border: 1px solid #5c2b2b;
+  background: #2a1515;
+  color: #fca5a5;
+  padding: 8px 14px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-collision-discard:hover {
+  background: #7f1d1d;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn-collision-hold {
+  background: #f3b625 !important;
+  color: #101820 !important;
+  font-weight: 900 !important;
+}
+

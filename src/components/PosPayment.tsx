@@ -9,6 +9,7 @@ import { completeSaleAtomically, fetchNextInvoiceNumber } from '../services/supa
 import { useAuth } from '../context/AuthContext'
 import { useSubscription } from '../context/SubscriptionContext'
 import { ConnectionIndicator } from './PwaManager'
+import { heldOrdersStore, generateHeldOrderId, type HeldOrder } from '../data/heldOrders'
 
 type GroceryCartItem = { id: string; kind: 'grocery'; product: GroceryProduct; quantity: number; total: number }
 type Cart = ChickenCartItem | GroceryCartItem
@@ -250,6 +251,294 @@ function SaleSuccess({ sale, onNewSale, onClose }: { sale: Sale; onNewSale: () =
   return <ReceiptPreview sale={sale} close={onClose} newSale={onNewSale} />
 }
 
+function formatHoldTime(isoString: string): string {
+  try {
+    const d = new Date(isoString)
+    const hours12 = d.getHours() % 12 || 12
+    const mins = String(d.getMinutes()).padStart(2, '0')
+    const ampm = d.getHours() >= 12 ? 'PM' : 'AM'
+    const timeStr = `${hours12}:${mins} ${ampm}`
+    const diffMs = Date.now() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    let relative = 'Just now'
+    if (diffMins === 1) relative = '1m ago'
+    else if (diffMins > 1 && diffMins < 60) relative = `${diffMins}m ago`
+    else if (diffMins >= 60) relative = `${Math.floor(diffMins / 60)}h ago`
+    return `${timeStr} (${relative})`
+  } catch {
+    return 'Recently'
+  }
+}
+
+function HoldConfirmModal({
+  cart,
+  total,
+  nextHoldNumber,
+  onCancel,
+  onConfirm,
+}: {
+  cart: Cart[]
+  total: number
+  nextHoldNumber: number
+  onCancel: () => void
+  onConfirm: (customNote: string) => void
+}) {
+  const [note, setNote] = useState('')
+  const itemCount = cart.reduce((sum, item) => sum + (item.kind === 'grocery' ? item.quantity : 1), 0)
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    onConfirm(note)
+  }
+
+  return (
+    <div className="shade">
+      <form className="dialog custom-dialog hold-modal-dialog" onSubmit={handleSubmit}>
+        <header>
+          <div>
+            <small>PARK BILL · HOLD #{nextHoldNumber}</small>
+            <h2>Hold Current Bill</h2>
+            <p>
+              Current Bill: <strong>{itemCount} items</strong> · <strong style={{ color: '#f3b625' }}>{formatMoney(total)}</strong>
+            </p>
+          </div>
+          <button type="button" onClick={onCancel} title="Close">
+            ×
+          </button>
+        </header>
+
+        <div className="editor-body">
+          <label>
+            CUSTOMER NAME / NOTE (OPTIONAL)
+            <input
+              autoFocus
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder={`e.g. Blue shirt customer, or press Enter for "Hold #${nextHoldNumber}"`}
+            />
+            <span style={{ fontSize: '11px', color: '#8b9aa7', marginTop: '4px', display: 'block' }}>
+              Press <strong>Enter</strong> or click Confirm to park this bill. You can resume it anytime.
+            </span>
+          </label>
+
+          <div className="hold-items-preview">
+            <label style={{ fontSize: '11px', color: '#8b9aa7', marginBottom: '6px', display: 'block' }}>
+              ITEMS IN THIS BILL ({cart.length}):
+            </label>
+            <div className="hold-items-list">
+              {cart.map(item => (
+                <div className="hold-item-line" key={item.id}>
+                  <span>
+                    {item.kind === 'chicken' ? item.productName : item.product.name}
+                    <small style={{ color: '#8b9aa7', marginLeft: '6px' }}>
+                      {item.kind === 'chicken'
+                        ? item.weightGrams >= 1000
+                          ? `${(item.weightGrams / 1000).toFixed(2).replace(/\.00$/, '')} kg`
+                          : `${item.weightGrams}g`
+                        : `×${item.quantity} ${item.product.unit || ''}`}
+                    </small>
+                  </span>
+                  <b>{formatMoney(item.total)}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <footer>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="confirm btn-confirm-hold">
+            ⏸️ Confirm Hold
+          </button>
+        </footer>
+      </form>
+    </div>
+  )
+}
+
+function RecallHeldOrdersModal({
+  heldOrders,
+  onClose,
+  onResume,
+  onDelete,
+  onClearAll,
+}: {
+  heldOrders: HeldOrder[]
+  onClose: () => void
+  onResume: (order: HeldOrder) => void
+  onDelete: (id: string) => void
+  onClearAll: () => void
+}) {
+  return (
+    <div className="shade">
+      <div className="dialog custom-dialog held-orders-dialog">
+        <header>
+          <div>
+            <small>RECALL BILLS</small>
+            <h2>Orders on Hold ({heldOrders.length})</h2>
+            <p>Select any held order to resume billing and complete payment</p>
+          </div>
+          <button type="button" onClick={onClose} title="Close">
+            ×
+          </button>
+        </header>
+
+        <div className="editor-body held-orders-body">
+          {heldOrders.length ? (
+            <div className="held-orders-list">
+              {heldOrders.map(order => (
+                <div className="held-order-card" key={order.id}>
+                  <div className="held-order-top">
+                    <div className="held-order-title-group">
+                      <span className="held-order-ref-badge">⏸️ {order.reference}</span>
+                      <span className="held-order-time">{formatHoldTime(order.createdAt)}</span>
+                      {order.cashier && (
+                        <span className="held-order-cashier">· {order.cashier}</span>
+                      )}
+                    </div>
+                    <b className="held-order-total">{formatMoney(order.total)}</b>
+                  </div>
+
+                  {order.note && order.note !== order.reference && (
+                    <div className="held-order-note">
+                      <span>Note:</span> {order.note}
+                    </div>
+                  )}
+
+                  <div className="held-order-items-snippet">
+                    {order.items.map((item, idx) => (
+                      <span className="held-item-chip" key={idx}>
+                        {item.kind === 'chicken' ? item.productName : item.product.name}{' '}
+                        <small>
+                          {item.kind === 'chicken'
+                            ? item.weightGrams >= 1000
+                              ? `${(item.weightGrams / 1000).toFixed(2).replace(/\.00$/, '')}kg`
+                              : `${item.weightGrams}g`
+                            : `×${item.quantity}`}
+                        </small>
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="held-order-footer">
+                    <button
+                      type="button"
+                      className="btn-held-delete"
+                      onClick={() => {
+                        if (window.confirm(`Discard held order "${order.reference}"?`)) {
+                          onDelete(order.id)
+                        }
+                      }}
+                      title="Discard this held order"
+                    >
+                      🗑️ Discard
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-held-resume"
+                      onClick={() => onResume(order)}
+                    >
+                      ▶ Resume Bill
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="pos-empty-cart">
+              <div className="empty-cart-icon">📋</div>
+              <b>No orders on hold</b>
+              <span>Use the "Hold Bill" button in the cart panel whenever you need to temporarily park an order.</span>
+            </div>
+          )}
+        </div>
+
+        <footer>
+          {heldOrders.length > 0 && (
+            <button
+              type="button"
+              className="btn-danger-subtle"
+              onClick={() => {
+                if (window.confirm('Are you sure you want to discard ALL held orders?')) {
+                  onClearAll()
+                }
+              }}
+            >
+              Clear All Held
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+  )
+}
+
+function CollisionModal({
+  pendingOrder,
+  onHoldCurrentAndResume,
+  onDiscardCurrentAndResume,
+  onCancel,
+}: {
+  pendingOrder: HeldOrder
+  onHoldCurrentAndResume: () => void
+  onDiscardCurrentAndResume: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="shade">
+      <div className="dialog custom-dialog collision-dialog">
+        <header>
+          <div>
+            <small>ACTIVE BILL DETECTED</small>
+            <h2>Current Bill Is Not Empty</h2>
+            <p>You have items in your current bill. How would you like to proceed?</p>
+          </div>
+          <button type="button" onClick={onCancel} title="Close">
+            ×
+          </button>
+        </header>
+
+        <div className="editor-body">
+          <div className="collision-info-box">
+            <p>
+              You want to resume <strong>"{pendingOrder.reference}"</strong> ({pendingOrder.items.length} items · {formatMoney(pendingOrder.total)}).
+            </p>
+            <p style={{ color: '#9bb1c4', fontSize: '12px', marginTop: '8px' }}>
+              Choose whether to park your current bill or discard it so you don't lose items:
+            </p>
+          </div>
+        </div>
+
+        <footer className="collision-footer">
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-collision-discard"
+            onClick={onDiscardCurrentAndResume}
+          >
+            Discard Current & Resume
+          </button>
+          <button
+            type="button"
+            className="confirm btn-collision-hold"
+            onClick={onHoldCurrentAndResume}
+          >
+            ⏸️ Hold Current & Resume
+          </button>
+        </footer>
+      </div>
+    </div>
+  )
+}
+
 export function PosPayment({
   chickenItems,
   groceryItems,
@@ -271,6 +560,43 @@ export function PosPayment({
   const [notice, setNotice] = useState('')
   const [payment, setPayment] = useState(false)
   const [completed, setCompleted] = useState<Sale | null>(null)
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => heldOrdersStore.get())
+  const [isHoldModalOpen, setIsHoldModalOpen] = useState(false)
+  const [isRecallModalOpen, setIsRecallModalOpen] = useState(false)
+  const [collisionOrder, setCollisionOrder] = useState<HeldOrder | null>(null)
+
+  // Synchronize held orders across tabs and triggers
+  useEffect(() => {
+    const refreshHeld = () => setHeldOrders(heldOrdersStore.get())
+    window.addEventListener('held_orders_updated', refreshHeld)
+    window.addEventListener('storage', refreshHeld)
+    return () => {
+      window.removeEventListener('held_orders_updated', refreshHeld)
+      window.removeEventListener('storage', refreshHeld)
+    }
+  }, [])
+
+  // Keyboard shortcut: F4 to Hold Current Bill, Alt+H to Hold or Recall
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F4') {
+        e.preventDefault()
+        if (cart.length) {
+          setIsHoldModalOpen(true)
+        }
+      }
+      if (e.altKey && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault()
+        if (cart.length) {
+          setIsHoldModalOpen(true)
+        } else {
+          setIsRecallModalOpen(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [cart])
 
   // Extract unique grocery categories
   const categories = useMemo(() => {
@@ -585,6 +911,63 @@ export function PosPayment({
   }
 
   const total = cart.reduce((sum, item) => sum + item.total, 0)
+
+  const handleHoldBill = (note: string) => {
+    if (!cart.length) return
+    const nextNum = heldOrdersStore.getNextHoldNumber()
+    const reference = note.trim() || `Hold #${nextNum}`
+    const order: HeldOrder = {
+      id: generateHeldOrderId(),
+      reference,
+      note: note.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      items: [...cart],
+      itemCount: cart.reduce((sum, item) => sum + (item.kind === 'grocery' ? item.quantity : 1), 0),
+      total,
+      cashier: profile?.full_name || 'Cashier',
+    }
+    heldOrdersStore.save(order)
+    setCart([])
+    setIsHoldModalOpen(false)
+    setNotice(`Bill held as "${reference}". Ready for next customer.`)
+  }
+
+  const handleResumeOrder = (order: HeldOrder) => {
+    if (cart.length > 0) {
+      setCollisionOrder(order)
+      return
+    }
+    executeResume(order)
+  }
+
+  const executeResume = (order: HeldOrder) => {
+    setCart(order.items)
+    heldOrdersStore.remove(order.id)
+    setIsRecallModalOpen(false)
+    setCollisionOrder(null)
+    setNotice(`Resumed "${order.reference}" (${order.items.length} items · ${formatMoney(order.total)})`)
+  }
+
+  const handleHoldCurrentAndResume = (orderToResume: HeldOrder) => {
+    const nextNum = heldOrdersStore.getNextHoldNumber()
+    const autoRef = `Hold #${nextNum}`
+    const currentHeld: HeldOrder = {
+      id: generateHeldOrderId(),
+      reference: autoRef,
+      createdAt: new Date().toISOString(),
+      items: [...cart],
+      itemCount: cart.reduce((sum, item) => sum + (item.kind === 'grocery' ? item.quantity : 1), 0),
+      total,
+      cashier: profile?.full_name || 'Cashier',
+    }
+    heldOrdersStore.save(currentHeld)
+    executeResume(orderToResume)
+  }
+
+  const handleDiscardCurrentAndResume = (orderToResume: HeldOrder) => {
+    executeResume(orderToResume)
+  }
+
   const products = groceryItems.filter(
     product =>
       product.active &&
@@ -619,18 +1002,37 @@ export function PosPayment({
               <small>CURRENT BILL</small>
               <h2>Invoice #{salesStore.getNextInvoice()}</h2>
             </div>
-            <button
-              type="button"
-              className="btn-new-bill"
-              onClick={() => {
-                if (cart.length && !window.confirm('Clear current bill?')) return
-                setCart([])
-                setNotice('')
-              }}
-              title="Start New Bill"
-            >
-              + New Bill
-            </button>
+            <div className="bill-header-actions">
+              <button
+                type="button"
+                className="btn-hold-bill"
+                onClick={() => setIsHoldModalOpen(true)}
+                disabled={!cart.length}
+                title="Hold current bill (F4)"
+              >
+                ⏸️ Hold
+              </button>
+              <button
+                type="button"
+                className={`btn-held-list ${heldOrders.length > 0 ? 'has-held' : ''}`}
+                onClick={() => setIsRecallModalOpen(true)}
+                title="View held bills"
+              >
+                📋 Held <span className="held-count-badge">{heldOrders.length}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-new-bill"
+                onClick={() => {
+                  if (cart.length && !window.confirm('Clear current bill?')) return
+                  setCart([])
+                  setNotice('')
+                }}
+                title="Start New Bill"
+              >
+                + New Bill
+              </button>
+            </div>
           </header>
 
           {/* Barcode / Chicken Code Search Box */}
@@ -755,16 +1157,28 @@ export function PosPayment({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="pos-btn-pay"
-              disabled={!cart.length}
-              onClick={() => setPayment(true)}
-            >
-              <span className="pay-icon">💳</span>
-              <span className="pay-text">PAY NOW</span>
-              <b className="pay-amount">{formatMoney(total)}</b>
-            </button>
+            <div className="pos-bill-actions-row">
+              <button
+                type="button"
+                className="pos-btn-hold-action"
+                disabled={!cart.length}
+                onClick={() => setIsHoldModalOpen(true)}
+                title="Hold Current Bill (F4)"
+              >
+                <span>⏸️ Hold Bill</span>
+              </button>
+
+              <button
+                type="button"
+                className="pos-btn-pay"
+                disabled={!cart.length}
+                onClick={() => setPayment(true)}
+              >
+                <span className="pay-icon">💳</span>
+                <span className="pay-text">PAY NOW</span>
+                <b className="pay-amount">{formatMoney(total)}</b>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1040,6 +1454,38 @@ export function PosPayment({
       {/* PAYMENT MODAL */}
       {payment && (
         <PaymentModal total={total} onCancel={() => setPayment(false)} onComplete={completeSale} />
+      )}
+
+      {/* HOLD CONFIRM MODAL */}
+      {isHoldModalOpen && (
+        <HoldConfirmModal
+          cart={cart}
+          total={total}
+          nextHoldNumber={heldOrdersStore.peekNextHoldNumber()}
+          onCancel={() => setIsHoldModalOpen(false)}
+          onConfirm={handleHoldBill}
+        />
+      )}
+
+      {/* RECALL HELD ORDERS MODAL */}
+      {isRecallModalOpen && (
+        <RecallHeldOrdersModal
+          heldOrders={heldOrders}
+          onClose={() => setIsRecallModalOpen(false)}
+          onResume={handleResumeOrder}
+          onDelete={id => heldOrdersStore.remove(id)}
+          onClearAll={() => heldOrdersStore.clear()}
+        />
+      )}
+
+      {/* COLLISION RESOLUTION MODAL */}
+      {collisionOrder && (
+        <CollisionModal
+          pendingOrder={collisionOrder}
+          onHoldCurrentAndResume={() => handleHoldCurrentAndResume(collisionOrder)}
+          onDiscardCurrentAndResume={() => handleDiscardCurrentAndResume(collisionOrder)}
+          onCancel={() => setCollisionOrder(null)}
+        />
       )}
 
       {/* SALE SUCCESS / RECEIPT PREVIEW */}
