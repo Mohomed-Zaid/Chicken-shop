@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react'
-import { calculateChickenPrice, formatMoney, type ChickenCartItem, type ChickenItem } from '../data/chicken'
+import { calculateChickenPrice, formatMoney, findChickenByCode, type ChickenCartItem, type ChickenItem } from '../data/chicken'
 import { groceryStore, type GroceryProduct } from '../data/grocery'
 import { salesStore, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
 import { movementStore } from '../data/purchases'
 import { ReceiptPreview } from './Receipt'
 import { storageAdapter } from '../services/storageAdapter'
-import { completeSaleAtomically } from '../services/supabase/salesService'
+import { completeSaleAtomically, fetchNextInvoiceNumber } from '../services/supabase/salesService'
 import { useAuth } from '../context/AuthContext'
 import { useSubscription } from '../context/SubscriptionContext'
 import { ConnectionIndicator } from './PwaManager'
@@ -311,6 +311,7 @@ export function PosPayment({
         productType: 'chicken',
         productId: selected.id,
         productName: selected.name,
+        code: selected.code,
         weightGrams: parsedWeight,
         pricePerKg: selected.pricePerKg,
         unitPrice: total,
@@ -334,20 +335,20 @@ export function PosPayment({
     setCart(current =>
       found
         ? current.map(item =>
-            item.id === found.id
-              ? { ...found, quantity: found.quantity + 1, total: (found.quantity + 1) * product.sellingPrice }
-              : item
-          )
+          item.id === found.id
+            ? { ...found, quantity: found.quantity + 1, total: (found.quantity + 1) * product.sellingPrice }
+            : item
+        )
         : [
-            ...current,
-            {
-              id: `g-${product.id}`,
-              kind: 'grocery',
-              product,
-              quantity: 1,
-              total: product.sellingPrice,
-            },
-          ]
+          ...current,
+          {
+            id: `g-${product.id}`,
+            kind: 'grocery',
+            product,
+            quantity: 1,
+            total: product.sellingPrice,
+          },
+        ]
     )
     setNotice('')
   }
@@ -375,28 +376,71 @@ export function PosPayment({
     setNotice('')
   }
 
+  const handleScanChange = (val: string) => {
+    setScan(val)
+    const trimmed = val.trim()
+    if (/^\d{3}$/.test(trimmed) || /^CH\d{3}$/i.test(trimmed)) {
+      const match = findChickenByCode(trimmed, chickenItems)
+      if (match) {
+        if (match.active) {
+          setSelected(match)
+          setGrams('')
+          setScan('')
+          setNotice('')
+        } else {
+          setNotice(`Chicken code ${match.code} (${match.name}) is inactive in Daily Chicken Prices.`)
+        }
+      }
+    }
+  }
+
   const submitScan = (event: FormEvent) => {
     event.preventDefault()
-    const trimmed = scan.trim().toLowerCase()
-    if (!trimmed) return
+    const rawTrimmed = scan.trim()
+    if (!rawTrimmed) return
 
-    const chickenMatch = chickenItems.find(
-      item => item.active && (item.name.toLowerCase().includes(trimmed) || item.cut.toLowerCase().includes(trimmed))
-    )
-    if (chickenMatch) {
-      setSelected(chickenMatch)
+    // 1. Search active chicken cuts by code (e.g. 002, 001, CH002, 102)
+    const chickenCodeMatch = findChickenByCode(rawTrimmed, chickenItems)
+    if (chickenCodeMatch) {
+      if (!chickenCodeMatch.active) {
+        setNotice(`Chicken code ${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
+        return
+      }
+      setSelected(chickenCodeMatch)
       setGrams('')
       setScan('')
       setNotice('')
       return
     }
 
-    const product = groceryItems.find(item => item.active && item.barcode === scan.trim())
+    // 2. Search chicken cuts by name/cut (e.g. breast, wings)
+    const lowerTrimmed = rawTrimmed.toLowerCase()
+    const chickenNameMatch = chickenItems.find(
+      item => item.active && (item.name.toLowerCase() === lowerTrimmed || item.cut.toLowerCase() === lowerTrimmed)
+    )
+    if (chickenNameMatch) {
+      setSelected(chickenNameMatch)
+      setGrams('')
+      setScan('')
+      setNotice('')
+      return
+    }
+
+    // 3. Search grocery products by barcode
+    const product = groceryItems.find(item => item.active && item.barcode === rawTrimmed)
     if (product) {
       addGrocery(product)
       setScan('')
+      setNotice('')
+      return
+    }
+
+    // 4. Not found message
+    const isChickenCodeQuery = /^0\d+/i.test(rawTrimmed) || /^ch\d+/i.test(rawTrimmed) || /^\d{3}$/.test(rawTrimmed)
+    if (isChickenCodeQuery) {
+      setNotice('Chicken code not found.')
     } else {
-      setNotice(`Product not found with barcode / name: "${scan.trim()}".`)
+      setNotice(`Product not found with barcode / chicken code: "${rawTrimmed}".`)
     }
   }
 
@@ -417,33 +461,44 @@ export function PosPayment({
       const items: SaleItem[] = cart.map(item =>
         item.kind === 'chicken'
           ? {
-              productId: item.productId,
-              productName: item.productName,
-              productType: 'chicken',
-              quantity: 1,
-              weightGrams: item.weightGrams,
-              unitPrice: item.unitPrice,
-              pricePerKg: item.pricePerKg,
-              costPrice: null,
-              total: item.total,
-            }
+            code: item.code || item.chicken?.code || null,
+            productId: item.productId,
+            productName: item.productName,
+            productType: 'chicken',
+            quantity: 1,
+            weightGrams: item.weightGrams,
+            unitPrice: item.unitPrice,
+            pricePerKg: item.pricePerKg,
+            costPrice: null,
+            total: item.total,
+          }
           : {
-              productId: item.product.id,
-              productName: item.product.name,
-              productType: 'grocery',
-              quantity: item.quantity,
-              weightGrams: null,
-              unitPrice: item.product.sellingPrice,
-              pricePerKg: null,
-              costPrice: item.product.costPrice,
-              total: item.total,
-            }
+            code: null,
+            productId: item.product.id,
+            productName: item.product.name,
+            productType: 'grocery',
+            quantity: item.quantity,
+            weightGrams: null,
+            unitPrice: item.product.sellingPrice,
+            pricePerKg: null,
+            costPrice: item.product.costPrice,
+            total: item.total,
+          }
       )
 
       const total = cart.reduce((sum, item) => sum + item.total, 0)
-      const sale: Sale = {
-        id: `sale-${Date.now()}-${Math.random()}`,
-        invoiceNumber: salesStore.getNextInvoice(),
+      let initialInvoice = salesStore.getNextInvoice()
+      if (storageAdapter.isSupabase()) {
+        try {
+          initialInvoice = await fetchNextInvoiceNumber()
+        } catch {
+          // fallback
+        }
+      }
+
+      let sale: Sale = {
+        id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        invoiceNumber: initialInvoice,
         date: new Date().toISOString().slice(0, 10),
         time: new Date().toLocaleTimeString(),
         items,
@@ -466,7 +521,7 @@ export function PosPayment({
 
       if (storageAdapter.isSupabase()) {
         try {
-          const { error } = await completeSaleAtomically(sale)
+          const { error, finalSale } = await completeSaleAtomically(sale)
           if (error) {
             console.error('completeSale error:', error)
             if (error.message?.includes('Subscription expired') || error.message?.includes('inactive')) {
@@ -487,15 +542,18 @@ export function PosPayment({
             }
             throw new Error(error.message || 'Sale could not be saved.')
           }
+          if (finalSale) {
+            sale = finalSale
+          }
         } catch (err: unknown) {
           if (err instanceof TypeError && err.message?.includes('Failed to fetch')) {
             throw new Error('Unable to connect to the server. Please check your internet connection and try again.')
           }
           throw err
         }
-      } else {
-        salesStore.saveSale(sale)
       }
+
+      salesStore.saveSale(sale)
 
       if (!storageAdapter.isSupabase()) {
         try {
@@ -511,8 +569,11 @@ export function PosPayment({
           'sales-invoice-sequence',
           String(Number(localStorage.getItem('sales-invoice-sequence') || '0') + 1)
         )
-        onStockChange(nextGrocery)
+      } else {
+        groceryStore.save(nextGrocery)
       }
+
+      onStockChange(nextGrocery)
 
       setCart([])
       setPayment(false)
@@ -572,13 +633,13 @@ export function PosPayment({
             </button>
           </header>
 
-          {/* Barcode Search Box */}
+          {/* Barcode / Chicken Code Search Box */}
           <form className="pos-search-bar" onSubmit={submitScan}>
             <span className="search-icon">🔍</span>
             <input
               value={scan}
-              onChange={event => setScan(event.target.value)}
-              placeholder="Scan barcode or type item / cut..."
+              onChange={event => handleScanChange(event.target.value)}
+              placeholder="Enter Chicken Code (e.g. 002) or scan barcode..."
               autoFocus
             />
             {scan && (
@@ -754,9 +815,12 @@ export function PosPayment({
                         }}
                         key={item.id}
                       >
-                        <span className="cut-name">{item.name}</span>
+                        <div className="card-top">
+                          <span className="cut-code-badge">{item.code || 'CH---'}</span>
+                          <span className="cut-name">{item.name}</span>
+                        </div>
                         <b className="cut-price">{formatMoney(item.pricePerKg)} / KG</b>
-                        <span className="cut-badge">{item.cut} Cut</span>
+                        <span className="cut-badge">{item.cut || item.name} Cut</span>
                       </button>
                     ))
                   ) : (
@@ -855,7 +919,7 @@ export function PosPayment({
           >
             <header>
               <div>
-                <small>SELECT WEIGHT</small>
+                <small>SELECT WEIGHT · <strong style={{ color: '#f3b625' }}>{selected.code}</strong></small>
                 <h2>{selected.name}</h2>
                 <p>
                   Rate: <strong>{formatMoney(selected.pricePerKg)} / KG</strong>

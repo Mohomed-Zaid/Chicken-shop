@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatMoney } from '../data/chicken'
 import { getExpenseReport } from '../services/reports/expenseReportService'
 import { getPurchaseReport } from '../services/reports/purchaseReportService'
@@ -6,12 +6,89 @@ import { getSalesReport } from '../services/reports/salesReportService'
 import { getProfitLossReport } from '../services/reports/profitLossReportService'
 import { getReportRange, reportFilters, type ReportDateRange } from '../services/reports/reportDateUtils'
 import { downloadExpensePdf, downloadPurchasePdf, downloadProfitLossPdf, downloadSalesPdf } from '../services/reports/reportPdfService'
+import { storageAdapter } from '../services/storageAdapter'
+import { fetchSalesFromSupabase } from '../services/supabase/salesService'
 
 type ReportName = 'Expense Report' | 'Purchase Report' | 'Sales Report' | 'Profit & Loss Report'
 const ReportCard = ({ label, value }: { label: string; value: string }) => <div className="report-summary-card"><small>{label}</small><b>{value}</b></div>
 export function Reports({ isAdmin }: { isAdmin: boolean }) {
-  const available: ReportName[] = isAdmin ? ['Expense Report', 'Purchase Report', 'Sales Report', 'Profit & Loss Report'] : ['Sales Report']; const [active, setActive] = useState<ReportName>(available[0]); const [filter, setFilter] = useState('Today'); const [start, setStart] = useState(''); const [end, setEnd] = useState(''); const [generated, setGenerated] = useState<ReportDateRange>(() => getReportRange('Today')); const range = useMemo(() => generated, [generated]); const generate = () => setGenerated(getReportRange(filter, start, end)); const print = () => window.print()
-  return <section className="prices-page reports-page"><header className="page-header"><div><small>BUSINESS REPORTS</small><h1>Reports</h1><p>Professional reports for completed business records.</p></div><div className="report-tabs">{available.map(item => <button className={active === item ? 'chosen' : ''} onClick={() => setActive(item)} key={item}>{item}</button>)}</div></header><div className="report-filters"><select value={filter} onChange={event => setFilter(event.target.value)}>{reportFilters.map(item => <option key={item}>{item}</option>)}</select>{filter === 'Custom Date Range' && <><input type="date" value={start} onChange={event => setStart(event.target.value)} /><input type="date" value={end} onChange={event => setEnd(event.target.value)} /></>}<button className="primary" onClick={generate}>Generate Report</button><button className="edit" onClick={print}>Print</button></div><div className="report-print-area"><div className="report-period"><span>From: {range.start}</span><span>To: {range.end}</span><span>Generated: {new Date().toLocaleString()}</span></div>{active === 'Expense Report' && <ExpenseSection range={range} onPdf={() => downloadExpensePdf(getExpenseReport(range), range)} />}{active === 'Purchase Report' && <PurchaseSection range={range} onPdf={() => downloadPurchasePdf(getPurchaseReport(range), range)} />}{active === 'Sales Report' && <SalesSection range={range} onPdf={() => downloadSalesPdf(getSalesReport(range), range)} />}{active === 'Profit & Loss Report' && <ProfitLossSection range={range} onPdf={() => downloadProfitLossPdf(getProfitLossReport(range), range)} />}</div></section>
+  const available: ReportName[] = isAdmin ? ['Expense Report', 'Purchase Report', 'Sales Report', 'Profit & Loss Report'] : ['Sales Report']
+  const [active, setActive] = useState<ReportName>(available[0])
+  const [filter, setFilter] = useState('Today')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [generated, setGenerated] = useState<ReportDateRange>(() => getReportRange('Today'))
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (storageAdapter.isSupabase()) {
+      fetchSalesFromSupabase().then(cloudSales => {
+        if (cloudSales && cloudSales.length > 0) {
+          localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+          setRefreshKey(k => k + 1)
+        }
+      }).catch(console.error)
+    }
+  }, [])
+
+  const range = useMemo(() => generated, [generated, refreshKey])
+  
+  const generate = async () => {
+    if (storageAdapter.isSupabase()) {
+      const cloudSales = await fetchSalesFromSupabase().catch(() => [])
+      if (cloudSales && cloudSales.length > 0) {
+        localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+      }
+    }
+    setGenerated(getReportRange(filter, start, end))
+    setRefreshKey(k => k + 1)
+  }
+
+  const print = () => window.print()
+  return (
+    <section className="prices-page reports-page">
+      <header className="page-header">
+        <div>
+          <small>BUSINESS REPORTS</small>
+          <h1>Reports</h1>
+          <p>Professional reports for completed business records.</p>
+        </div>
+        <div className="report-tabs">
+          {available.map(item => (
+            <button className={active === item ? 'chosen' : ''} onClick={() => setActive(item)} key={item}>
+              {item}
+            </button>
+          ))}
+        </div>
+      </header>
+      <div className="report-filters">
+        <select value={filter} onChange={event => setFilter(event.target.value)}>
+          {reportFilters.map(item => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+        {filter === 'Custom Date Range' && (
+          <>
+            <input type="date" value={start} onChange={event => setStart(event.target.value)} />
+            <input type="date" value={end} onChange={event => setEnd(event.target.value)} />
+          </>
+        )}
+        <button className="primary" onClick={generate}>Generate Report</button>
+        <button className="edit" onClick={print}>Print</button>
+      </div>
+      <div className="report-print-area">
+        <div className="report-period">
+          <span>From: {range.start}</span>
+          <span>To: {range.end}</span>
+          <span>Generated: {new Date().toLocaleString()}</span>
+        </div>
+        {active === 'Expense Report' && <ExpenseSection range={range} onPdf={() => downloadExpensePdf(getExpenseReport(range), range)} />}
+        {active === 'Purchase Report' && <PurchaseSection range={range} onPdf={() => downloadPurchasePdf(getPurchaseReport(range), range)} />}
+        {active === 'Sales Report' && <SalesSection range={range} onPdf={() => downloadSalesPdf(getSalesReport(range), range)} />}
+        {active === 'Profit & Loss Report' && <ProfitLossSection range={range} onPdf={() => downloadProfitLossPdf(getProfitLossReport(range), range)} />}
+      </div>
+    </section>
+  )
 }
 function ReportHeader({ title, onPdf }: { title: string; onPdf: () => void }) { return <header className="report-document-header"><div><small>CHICKEN KADE</small><h2>{title}</h2></div><button className="edit no-print" onClick={onPdf}>Download PDF</button></header> }
 function Empty() { return <p className="empty-report">No data found for the selected period.</p> }

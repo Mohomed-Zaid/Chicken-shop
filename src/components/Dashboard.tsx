@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatMoney } from '../data/chicken'
 import { getDashboardSnapshot, getDateRange, type DashboardSnapshot } from '../services/dashboardService'
+import { storageAdapter } from '../services/storageAdapter'
+import { fetchSalesFromSupabase } from '../services/supabase/salesService'
 import { LiveDateTime } from './dashboard/LiveDateTime'
 
 type Props = { onInventory?: () => void; isAdmin?: boolean }
@@ -21,10 +23,16 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
+      if (storageAdapter.isSupabase()) {
+        const cloudSales = await fetchSalesFromSupabase()
+        if (cloudSales && cloudSales.length > 0) {
+          localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+        }
+      }
       setSnapshot(getDashboardSnapshot(getDateRange(filter)))
     } catch {
       setError('Unable to load dashboard data.')

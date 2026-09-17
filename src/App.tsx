@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DailyChickenPrices } from './components/ChickenPrices'
 import { Navigation, PlaceholderPage } from './components/Pos'
 import { PosPayment } from './components/PosPayment'
@@ -20,6 +20,10 @@ import { useAuth } from './context/AuthContext'
 import { useSubscription } from './context/SubscriptionContext'
 import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
 import { groceryStore, type GroceryProduct } from './data/grocery'
+import { storageAdapter } from './services/storageAdapter'
+import { getProducts, saveProducts } from './services/supabase/productService'
+import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
+import { fetchSalesFromSupabase } from './services/supabase/salesService'
 import './index.css'
 
 export type Page = 'Dashboard' | 'POS' | 'Inventory' | 'Products' | 'Customers' | 'Daily Chicken Prices' | 'Expenses' | 'Reports' | 'Suppliers' | 'Purchases' | 'Settings' | 'Users'
@@ -44,6 +48,51 @@ export default function App() {
   const [items, setItems] = useState<ChickenItem[]>(() => chickenStore.loadItems())
   const [history, setHistory] = useState<PriceHistoryEntry[]>(() => chickenStore.loadHistory())
   const [grocery, setGrocery] = useState<GroceryProduct[]>(() => groceryStore.load())
+
+  // Synchronize products, chicken cuts, and sales with Supabase on start
+  useEffect(() => {
+    if (!isAuthenticated || !storageAdapter.isSupabase()) return
+
+    const initData = async () => {
+      try {
+        const [cloudProducts, cloudCuts, cloudSales] = await Promise.all([
+          getProducts().catch(() => [] as GroceryProduct[]),
+          getChickenCuts().catch(() => [] as ChickenItem[]),
+          fetchSalesFromSupabase().catch(() => [] as any[]),
+        ])
+
+        if (cloudSales && cloudSales.length > 0) {
+          localStorage.setItem('sales-transactions', JSON.stringify(cloudSales))
+        }
+
+        if (cloudProducts && cloudProducts.length > 0) {
+          setGrocery(cloudProducts)
+          groceryStore.save(cloudProducts)
+        } else {
+          // Supabase products table is empty: seed with local products
+          const localProducts = groceryStore.load()
+          if (localProducts.length > 0) {
+            await saveProducts(localProducts).catch(console.error)
+          }
+        }
+
+        if (cloudCuts && cloudCuts.length > 0) {
+          setItems(cloudCuts)
+          chickenStore.saveItems(cloudCuts)
+        } else {
+          // Supabase chicken_cuts table is empty: seed with local cuts
+          const localCuts = chickenStore.loadItems()
+          if (localCuts.length > 0) {
+            await saveChickenCuts(localCuts).catch(console.error)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync initial items with Supabase:', err)
+      }
+    }
+
+    initData()
+  }, [isAuthenticated])
 
   // Re-verify subscription when navigating between protected pages (silent check)
   const handleNavigate = (targetPage: Page) => {
@@ -77,26 +126,59 @@ export default function App() {
   const commitItems = (next: ChickenItem[]) => {
     setItems(next)
     chickenStore.saveItems(next)
-  }
-
-  const updatePrice = (id: string, price: number) => {
-    const current = items.find(item => item.id === id)
-    if (!current || current.pricePerKg === price) return
-    commitItems(items.map(item => item.id === id ? { ...item, pricePerKg: price } : item))
-    const entry: PriceHistoryEntry = {
-      id: `${Date.now()}-${Math.random()}`,
-      productName: current.name,
-      oldPrice: current.pricePerKg,
-      newPrice: price,
-      changedAt: new Date().toISOString(),
+    if (storageAdapter.isSupabase()) {
+      saveChickenCuts(next).catch(console.error)
     }
-    const next = [entry, ...history]
-    setHistory(next)
-    chickenStore.saveHistory(next)
   }
 
-  const addItem = (name: string, price: number) =>
-    commitItems([...items, { id: `custom-${Date.now()}`, name, cut: name, pricePerKg: price, active: true }])
+  const updatePrice = (id: string, code: string, name: string, price: number) => {
+    const current = items.find(item => item.id === id)
+    if (!current) return
+    const nextItems = items.map(item =>
+      item.id === id
+        ? { ...item, code, name, cut: name, pricePerKg: price, updatedAt: new Date().toISOString() }
+        : item
+    )
+    commitItems(nextItems)
+    if (current.pricePerKg !== price) {
+      const entry: PriceHistoryEntry = {
+        id: `${Date.now()}-${Math.random()}`,
+        productName: name || current.name,
+        oldPrice: current.pricePerKg,
+        newPrice: price,
+        changedAt: new Date().toISOString(),
+      }
+      const next = [entry, ...history]
+      setHistory(next)
+      chickenStore.saveHistory(next)
+      if (storageAdapter.isSupabase()) {
+        saveChickenPriceHistory([
+          {
+            id: entry.id,
+            chicken_cut_id: id,
+            old_price: entry.oldPrice,
+            new_price: entry.newPrice,
+            changed_at: entry.changedAt,
+          },
+        ]).catch(console.error)
+      }
+    }
+  }
+
+  const addItem = (code: string, name: string, price: number) =>
+    commitItems([
+      ...items,
+      {
+        id: `custom-${Date.now()}`,
+        code,
+        name,
+        cut: name,
+        pricePerKg: price,
+        active: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ])
 
   const toggle = (id: string) =>
     commitItems(items.map(item => item.id === id ? { ...item, active: !item.active } : item))
@@ -104,6 +186,9 @@ export default function App() {
   const saveGrocery = (next: GroceryProduct[]) => {
     setGrocery(next)
     groceryStore.save(next)
+    if (storageAdapter.isSupabase()) {
+      saveProducts(next).catch(console.error)
+    }
   }
 
   const productProps = {
@@ -119,6 +204,7 @@ export default function App() {
           : [...grocery, { ...product, id: `grocery-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]
       ),
   }
+
 
   const denied = adminPages.includes(page) && !isAdmin
 

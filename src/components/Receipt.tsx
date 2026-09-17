@@ -68,7 +68,7 @@ export function Receipt({ sale }: { sale: Sale }) {
         </div>
         {sale.items.map((item, index) => (
           <article key={`${item.productId}-${index}`}>
-            <b>{item.productName}</b>
+            <b>{item.code ? `${item.code} - ${item.productName}` : item.productName}</b>
             <span>
               {item.productType === 'chicken'
                 ? `${weight(item.weightGrams || 0)} × ${formatMoney(item.pricePerKg || 0)}/kg`
