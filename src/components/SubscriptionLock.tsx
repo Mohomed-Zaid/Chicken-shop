@@ -108,7 +108,11 @@ export function SubscriptionLock() {
               <b>30 Days Commercial License</b>
             </div>
             <div className="lock-detail-row">
-              <span>Expiry Date:</span>
+              <span>Start Date:</span>
+              <b>{formatExpiry(subscription?.start_date)}</b>
+            </div>
+            <div className="lock-detail-row">
+              <span>End Date (Expiry):</span>
               <b className="expiry-highlight">{formatExpiry(expiryDate)}</b>
             </div>
             {subscription?.server_time && (

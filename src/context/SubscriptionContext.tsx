@@ -20,6 +20,7 @@ interface SubscriptionContextValue {
   isSuspended: boolean
   isUnverified: boolean
   daysRemaining: number
+  startDate: string | null
   expiryDate: string | null
   error: string | null
   history: SubscriptionHistoryEntry[]
@@ -178,6 +179,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const isSuspended = status === 'suspended'
   const isUnverified = status === 'unverified'
   const daysRemaining = subscription?.days_remaining ?? 0
+  const startDate = subscription?.start_date || null
   const expiryDate = subscription?.expiry_date || null
 
   const value: SubscriptionContextValue = useMemo(() => ({
@@ -189,6 +191,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     isSuspended,
     isUnverified,
     daysRemaining,
+    startDate,
     expiryDate,
     error,
     history,
@@ -207,6 +210,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     isSuspended,
     isUnverified,
     daysRemaining,
+    startDate,
     expiryDate,
     error,
     history,

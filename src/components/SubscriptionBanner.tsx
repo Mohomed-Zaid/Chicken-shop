@@ -2,8 +2,18 @@ import { useState } from 'react'
 import { useSubscription } from '../context/SubscriptionContext'
 import { useAuth } from '../context/AuthContext'
 
+const formatDate = (iso: string | null | undefined) => {
+  if (!iso) return 'N/A'
+  try {
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch {
+    return iso
+  }
+}
+
 export function SubscriptionBanner() {
-  const { isActive, daysRemaining, renew } = useSubscription()
+  const { isActive, daysRemaining, renew, startDate, expiryDate } = useSubscription()
   const { isAdmin, profile } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [renewing, setRenewing] = useState(false)
@@ -36,7 +46,12 @@ export function SubscriptionBanner() {
     <div className={`subscription-warning-banner no-print ${daysRemaining <= 2 ? 'urgent' : ''}`}>
       <div className="banner-content">
         <span className="banner-icon">⚠️</span>
-        <span className="banner-text">{message}</span>
+        <div className="banner-text-group">
+          <span className="banner-text">{message}</span>
+          <span className="banner-dates">
+            Subscription Period: <strong>{formatDate(startDate)}</strong> — <strong>{formatDate(expiryDate)}</strong>
+          </span>
+        </div>
       </div>
       <div className="banner-actions">
         {isAdmin && (

@@ -159,11 +159,11 @@ export function Settings() {
                   </strong>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">ACTIVATED ON</span>
+                  <span className="stat-label">START DATE</span>
                   <span className="stat-subvalue">{formatDate(subscription?.start_date)}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">EXPIRY DATE</span>
+                  <span className="stat-label">END DATE (EXPIRY)</span>
                   <span className="stat-subvalue highlight">{formatDate(expiryDate)}</span>
                 </div>
               </div>
