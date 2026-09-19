@@ -19,7 +19,7 @@ import { PwaUpdatePrompt, PwaInstallPrompt } from './components/PwaManager'
 import { useAuth } from './context/AuthContext'
 import { useSubscription } from './context/SubscriptionContext'
 import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
-import { groceryStore, type GroceryProduct } from './data/grocery'
+import { groceryStore, ensureGroceryCodes, type GroceryProduct } from './data/grocery'
 import { storageAdapter } from './services/storageAdapter'
 import { getProducts, saveProducts } from './services/supabase/productService'
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
@@ -79,8 +79,9 @@ export default function App() {
         }
 
         if (cloudProducts && cloudProducts.length > 0) {
-          setGrocery(cloudProducts)
-          groceryStore.save(cloudProducts)
+          const withCodes = ensureGroceryCodes(cloudProducts)
+          setGrocery(withCodes)
+          groceryStore.save(withCodes)
         } else {
           // Supabase products table is empty: seed with local products
           const localProducts = groceryStore.load()
@@ -243,7 +244,7 @@ export default function App() {
         ) : page === 'Suppliers' ? (
           <Suppliers />
         ) : page === 'Purchases' ? (
-          <Purchases />
+          <Purchases chickenItems={items} grocery={grocery} onStockChange={saveGrocery} />
         ) : page === 'Products' ? (
           <Products {...productProps} />
         ) : page === 'Daily Chicken Prices' ? (

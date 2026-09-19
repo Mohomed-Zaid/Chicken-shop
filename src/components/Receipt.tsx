@@ -5,7 +5,7 @@ import { storageAdapter } from '../services/storageAdapter'
 import { getBusinessSettings, type BusinessSettingsRow } from '../services/supabase/settingsService'
 import { getCurrentSubscription } from '../services/subscriptionService'
 
-type ReceiptSettings = {
+export type ReceiptSettings = {
   businessName: string
   address: string
   phone: string
@@ -17,7 +17,7 @@ type ReceiptSettings = {
   autoPrintReceipt: boolean
 }
 
-const DEFAULT_SETTINGS: ReceiptSettings = {
+export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   businessName: 'Chicken Kade & Grocery',
   address: '123 Main Street, Colombo, Sri Lanka',
   phone: '+94 77 726 2600',
@@ -28,8 +28,9 @@ const DEFAULT_SETTINGS: ReceiptSettings = {
   showPaymentMethod: true,
   autoPrintReceipt: false,
 }
+const DEFAULT_SETTINGS = DEFAULT_RECEIPT_SETTINGS
 
-function loadReceiptSettings(): ReceiptSettings {
+export function loadReceiptSettings(): ReceiptSettings {
   // 1. Try modern storageAdapter / Supabase cached row
   try {
     const cached = storageAdapter.readLocal<BusinessSettingsRow | null>('business_settings', null)
@@ -150,7 +151,7 @@ const CODE39_MAP: Record<string, string> = {
   '*': '100101101101',
 }
 
-function BarcodeSvg({ text }: { text: string }) {
+export function BarcodeSvg({ text }: { text: string }) {
   const clean = `*${text.toUpperCase().replace(/[^0-9A-Z\-. $/+%]/g, '')}*`
   let bitString = ''
   for (const char of clean) {

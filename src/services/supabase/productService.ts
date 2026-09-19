@@ -4,6 +4,7 @@ import { listRows, upsertRows } from './clientHelpers'
 export type ProductRow = {
   id: string
   name: string
+  code?: string | null
   category: string | null
   barcode: string | null
   cost_price: number
@@ -18,6 +19,7 @@ export type ProductRow = {
 
 export const rowToProduct = (row: ProductRow): GroceryProduct => ({
   id: row.id,
+  code: row.code || '',
   name: row.name,
   category: row.category || 'Grocery',
   barcode: row.barcode || '',

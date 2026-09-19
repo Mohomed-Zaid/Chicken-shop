@@ -3,7 +3,15 @@ import type { GroceryProduct } from './grocery'
 export type PurchasePaymentMethod = 'Cash' | 'Card' | 'Credit' | 'Other'
 export type SupplierPaymentMethod = 'Cash' | 'Card' | 'Other'
 export interface Supplier { id: string; name: string; phone: string; address: string; email: string; openingBalance: number; active: boolean; createdAt: string; updatedAt: string }
-export interface PurchaseItem { productId: string; productName: string; quantity: number; costPrice: number; total: number }
+export interface PurchaseItem {
+  productId: string
+  productName: string
+  productType?: 'chicken' | 'grocery'
+  quantity: number
+  unit?: string
+  costPrice: number
+  total: number
+}
 export interface Purchase { id: string; purchaseNumber: string; supplierId: string | null; supplierName: string; date: string; time: string; items: PurchaseItem[]; subtotal: number; discount: number; total: number; paymentMethod: PurchasePaymentMethod; amountPaid: number; balanceDue: number; status: 'completed' | 'cancelled'; createdAt: string }
 export interface SupplierPayment { id: string; supplierId: string; date: string; time: string; amount: number; paymentMethod: SupplierPaymentMethod; notes: string }
 export interface StockMovement { id: string; productId: string; productName: string; type: 'purchase' | 'sale' | 'adjustment' | 'return' | 'damage' | 'expired' | 'lost' | 'found'; quantity: number; referenceId: string; referenceNumber: string; date: string; time: string; previousStock?: number; newStock?: number; reason?: string; notes?: string; createdBy?: string }

@@ -35,73 +35,45 @@ const priceKey = 'chicken-prices'
 const historyKey = 'chicken-price-history'
 
 export const defaultChickenItems: ChickenItem[] = [
-  { id: 'whole', code: '001', name: 'Fresh Chicken', cut: 'Whole', pricePerKg: 1000, active: true },
-  { id: 'breast', code: '002', name: 'Chicken Breast', cut: 'Breast', pricePerKg: 1000, active: true },
-  { id: 'legs', code: '003', name: 'Chicken Legs', cut: 'Legs', pricePerKg: 1000, active: true },
-  { id: 'wings', code: '004', name: 'Chicken Wings', cut: 'Wings', pricePerKg: 1000, active: true },
-  { id: 'liver', code: '005', name: 'Chicken Liver', cut: 'Liver', pricePerKg: 800, active: true },
-  { id: 'mixed', code: '006', name: 'Mixed Chicken', cut: 'Mixed', pricePerKg: 1000, active: true },
-  { id: 'other', code: '007', name: 'Other Chicken', cut: 'Other', pricePerKg: 1000, active: true },
-  { id: 'gizzard', code: '008', name: 'Chicken Gizzard', cut: 'Gizzard', pricePerKg: 900, active: true },
+  { id: 'whole', code: '1', name: 'Fresh Chicken', cut: 'Whole', pricePerKg: 1000, active: true },
+  { id: 'breast', code: '2', name: 'Chicken Breast', cut: 'Breast', pricePerKg: 1000, active: true },
+  { id: 'legs', code: '3', name: 'Chicken Legs', cut: 'Legs', pricePerKg: 1000, active: true },
+  { id: 'wings', code: '4', name: 'Chicken Wings', cut: 'Wings', pricePerKg: 1000, active: true },
+  { id: 'liver', code: '5', name: 'Chicken Liver', cut: 'Liver', pricePerKg: 800, active: true },
+  { id: 'mixed', code: '6', name: 'Mixed Chicken', cut: 'Mixed', pricePerKg: 1000, active: true },
+  { id: 'other', code: '7', name: 'Other Chicken', cut: 'Other', pricePerKg: 1000, active: true },
+  { id: 'gizzard', code: '8', name: 'Chicken Gizzard', cut: 'Gizzard', pricePerKg: 900, active: true },
 ]
 
 export const defaultCodeMapping: Record<string, string> = {
-  whole: '001',
-  'fresh-chicken': '001',
-  breast: '002',
-  legs: '003',
-  wings: '004',
-  liver: '005',
-  mixed: '006',
-  other: '007',
-  gizzard: '008',
-}
-
-const numericCodeMapping: Record<string, string> = {
-  '101': '001',
-  '102': '002',
-  '103': '003',
-  '104': '004',
-  '105': '005',
-  '106': '006',
-  '107': '007',
-  '1': '001',
-  '2': '002',
-  '3': '003',
-  '4': '004',
-  '5': '005',
-  '6': '006',
-  '7': '007',
-  '8': '008',
-  '01': '001',
-  '02': '002',
-  '03': '003',
-  '04': '004',
-  '05': '005',
-  '06': '006',
-  '07': '007',
-  '08': '008',
-  CH001: '001',
-  CH002: '002',
-  CH003: '003',
-  CH004: '004',
-  CH005: '005',
-  CH006: '006',
-  CH007: '007',
-  CH008: '008',
+  whole: '1',
+  'fresh-chicken': '1',
+  breast: '2',
+  legs: '3',
+  wings: '4',
+  liver: '5',
+  mixed: '6',
+  other: '7',
+  gizzard: '8',
 }
 
 export const normalizeChickenCode = (rawCode: string): string => {
   let trimmed = rawCode.trim().toUpperCase()
-  if (numericCodeMapping[trimmed]) {
-    return numericCodeMapping[trimmed]
-  }
+  if (!trimmed) return ''
+
   if (trimmed.startsWith('CH')) {
-    const numPart = trimmed.replace(/^CH-?0*/, '')
-    if (/^\d+$/.test(numPart)) {
-      return String(numPart).padStart(3, '0')
+    trimmed = trimmed.replace(/^CH-?0*/, '')
+  }
+
+  // If numeric, remove leading zeros (e.g. 001 -> 1, 02 -> 2)
+  if (/^\d+$/.test(trimmed)) {
+    const num = Number(trimmed)
+    // Chicken codes are strictly below 100 (1 to 99). 100+ is reserved for groceries!
+    if (num > 0 && num < 100) {
+      return String(num)
     }
   }
+
   return trimmed
 }
 
@@ -109,10 +81,12 @@ export const findChickenByCode = (query: string, items: ChickenItem[]): ChickenI
   const normalized = normalizeChickenCode(query)
   if (!normalized) return null
 
-  // 1. Direct code match (e.g. 002)
+  // 1. Match by normalized code (e.g. '1', '2')
   const codeMatch = items.find(
-    item => (item.code && normalizeChickenCode(item.code) === normalized) ||
-            defaultCodeMapping[item.id] === normalized
+    item =>
+      (item.code && normalizeChickenCode(item.code) === normalized) ||
+      defaultCodeMapping[item.id] === normalized ||
+      (Number(item.code) === Number(normalized) && Number(normalized) > 0 && Number(normalized) < 100)
   )
   if (codeMatch) return codeMatch
 
@@ -123,9 +97,9 @@ const migrateItemsWithCodes = (items: ChickenItem[]): ChickenItem[] => {
   let changed = false
   const updated = items.map((item, index) => {
     const currentCode = item.code ? item.code.trim() : ''
-    const fallback = defaultCodeMapping[item.id] || String(index + 1).padStart(3, '0')
+    const fallback = defaultCodeMapping[item.id] || String(index + 1)
     const normalized = normalizeChickenCode(currentCode || fallback)
-    if (!currentCode || currentCode !== normalized || currentCode.startsWith('CH')) {
+    if (!currentCode || currentCode !== normalized || currentCode.startsWith('0') || currentCode.startsWith('CH')) {
       changed = true
       return { ...item, code: normalized }
     }

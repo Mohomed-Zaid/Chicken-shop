@@ -1246,7 +1246,8 @@ button {
   margin-top: 16px;
 }
 
-.editor-body input {
+.editor-body input,
+.editor-body select {
   display: block;
   width: 100%;
   height: 46px;
@@ -1254,9 +1255,264 @@ button {
   border: 1px solid #cbd4da;
   border-radius: 4px;
   padding: 0 11px;
-  font-size: 16px;
+  font-size: 15px;
+  background-color: #ffffff;
+  color: #1e293b;
   outline-color: #e8aa15;
+  box-sizing: border-box;
 }
+
+/* ==========================================================================
+   PURCHASE EDITOR & MODAL STYLES (CHICKEN & GROCERY)
+   ========================================================================== */
+.dialog.purchase-editor {
+  width: min(720px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.purchase-editor .editor-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  max-height: calc(92vh - 140px);
+}
+
+.purchase-field-group {
+  margin-bottom: 14px;
+}
+
+.purchase-field-group > label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #475569;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.purchase-field-group input,
+.purchase-field-group select {
+  width: 100%;
+  height: 42px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 15px;
+  color: #1e293b;
+  background-color: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.purchase-field-group input:focus,
+.purchase-field-group select:focus {
+  outline: none;
+  border-color: #e8aa15;
+  box-shadow: 0 0 0 3px rgba(232, 170, 21, 0.18);
+}
+
+/* Category Switcher Tabs */
+.purchase-type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  margin: 6px 0 16px;
+}
+
+.purchase-type-tab {
+  height: 42px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.purchase-type-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Item Entry Box */
+.purchase-add-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.purchase-add-box.chicken-mode {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.purchase-add-grid {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 1.2fr;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 620px) {
+  .purchase-add-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.purchase-quick-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.purchase-quick-chip {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.purchase-quick-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.btn-add-line-action {
+  margin-top: 12px;
+  width: 100%;
+  height: 42px;
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+
+.btn-add-line-action:hover {
+  background: #1e293b;
+}
+
+/* Lines Table / List */
+.purchase-items-list-wrap {
+  margin-bottom: 18px;
+}
+
+.purchase-item-row-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.purchase-item-row-card:hover {
+  border-color: #cbd5e1;
+}
+
+/* Total Card Banner */
+.purchase-total-card {
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.purchase-total-card .total-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.purchase-total-card .total-value {
+  font-size: 22px;
+  font-weight: 900;
+  color: #f59e0b;
+}
+
+/* Payment Method Buttons */
+.purchase-methods-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 500px) {
+  .purchase-methods-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.purchase-method-chip {
+  height: 42px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.purchase-method-chip:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.purchase-method-chip.active {
+  border-color: #e8aa15;
+  background: #fefce8;
+  color: #92400e;
+  font-weight: 800;
+}
+
 
 .read-only {
   display: grid;
@@ -5177,10 +5433,11 @@ button {
   .pos-grid,
   .bill,
   .catalog,
-  .dashboard-live-clock-card,
   .dashboard-page,
   .settings-page,
-  .prices-page:not(.reports-page),
+  .prices-page:not(.reports-page):not(:has(.shade)):not(:has(.receipt)):not(:has(.receipt-modal-shade)),
+  .prices-page:not(.reports-page) > :not(.shade):not(.receipt-modal-shade):not(.report-print-area),
+  .purchases-page > :not(.shade):not(.receipt-modal-shade),
   .subscription-warning-banner,
   .subscription-banner,
   .pwa-update-banner,
@@ -5864,6 +6121,32 @@ button {
   background: #f3b625;
   padding: 2px 7px;
   border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Grocery Product Code Badges */
+.product-code-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #0f172a;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.product-code-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #1e293b;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 2px 7px;
+  border-radius: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 

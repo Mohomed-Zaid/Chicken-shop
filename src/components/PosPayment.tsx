@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react'
 import { calculateChickenPrice, formatMoney, findChickenByCode, type ChickenCartItem, type ChickenItem } from '../data/chicken'
-import { groceryStore, type GroceryProduct } from '../data/grocery'
+import { groceryStore, findGroceryByCode, type GroceryProduct } from '../data/grocery'
 import { salesStore, toLocalDateString, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
 import { movementStore } from '../data/purchases'
 import { ReceiptPreview } from './Receipt'
@@ -705,17 +705,24 @@ export function PosPayment({
   const handleScanChange = (val: string) => {
     setScan(val)
     const trimmed = val.trim()
-    if (/^\d{3}$/.test(trimmed) || /^CH\d{3}$/i.test(trimmed)) {
+    // 1. Fast match for standard barcode scanners (8+ digits)
+    if (/^\d{8,}$/.test(trimmed)) {
+      const product = groceryItems.find(item => item.active && item.barcode === trimmed)
+      if (product) {
+        addGrocery(product)
+        setScan('')
+        setNotice('')
+        return
+      }
+    }
+    // 2. Fast match for CH... prefixed chicken cuts
+    if (/^CH\d+/i.test(trimmed)) {
       const match = findChickenByCode(trimmed, chickenItems)
-      if (match) {
-        if (match.active) {
-          setSelected(match)
-          setGrams('')
-          setScan('')
-          setNotice('')
-        } else {
-          setNotice(`Chicken code ${match.code} (${match.name}) is inactive in Daily Chicken Prices.`)
-        }
+      if (match && match.active) {
+        setSelected(match)
+        setGrams('')
+        setScan('')
+        setNotice('')
       }
     }
   }
@@ -725,11 +732,44 @@ export function PosPayment({
     const rawTrimmed = scan.trim()
     if (!rawTrimmed) return
 
-    // 1. Search active chicken cuts by code (e.g. 002, 001, CH002, 102)
+    const num = /^\d+$/.test(rawTrimmed) ? Number(rawTrimmed) : null
+
+    // 1. If numeric < 100 (1-99) or starts with CH: Chicken cut code lookup
+    if ((num !== null && num >= 1 && num < 100) || /^ch/i.test(rawTrimmed)) {
+      const chickenCodeMatch = findChickenByCode(rawTrimmed, chickenItems)
+      if (chickenCodeMatch) {
+        if (!chickenCodeMatch.active) {
+          setNotice(`Chicken #${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
+          return
+        }
+        setSelected(chickenCodeMatch)
+        setGrams('')
+        setScan('')
+        setNotice('')
+        return
+      }
+    }
+
+    // 2. If numeric >= 100: Grocery product code lookup
+    if (num !== null && num >= 100) {
+      const groceryMatch = findGroceryByCode(rawTrimmed, groceryItems)
+      if (groceryMatch) {
+        if (!groceryMatch.active) {
+          setNotice(`Grocery #${groceryMatch.code} (${groceryMatch.name}) is inactive.`)
+          return
+        }
+        addGrocery(groceryMatch)
+        setScan('')
+        setNotice('')
+        return
+      }
+    }
+
+    // 3. Fallback code match for chicken (alphanumeric code)
     const chickenCodeMatch = findChickenByCode(rawTrimmed, chickenItems)
     if (chickenCodeMatch) {
       if (!chickenCodeMatch.active) {
-        setNotice(`Chicken code ${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
+        setNotice(`Chicken #${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
         return
       }
       setSelected(chickenCodeMatch)
@@ -739,7 +779,7 @@ export function PosPayment({
       return
     }
 
-    // 2. Search chicken cuts by name/cut (e.g. breast, wings)
+    // 4. Search chicken cuts by name/cut (e.g. breast, wings)
     const lowerTrimmed = rawTrimmed.toLowerCase()
     const chickenNameMatch = chickenItems.find(
       item => item.active && (item.name.toLowerCase() === lowerTrimmed || item.cut.toLowerCase() === lowerTrimmed)
@@ -752,21 +792,33 @@ export function PosPayment({
       return
     }
 
-    // 3. Search grocery products by barcode
-    const product = groceryItems.find(item => item.active && item.barcode === rawTrimmed)
-    if (product) {
-      addGrocery(product)
+    // 5. Search grocery products by barcode
+    const productByBarcode = groceryItems.find(item => item.active && item.barcode === rawTrimmed)
+    if (productByBarcode) {
+      addGrocery(productByBarcode)
       setScan('')
       setNotice('')
       return
     }
 
-    // 4. Not found message
-    const isChickenCodeQuery = /^0\d+/i.test(rawTrimmed) || /^ch\d+/i.test(rawTrimmed) || /^\d{3}$/.test(rawTrimmed)
-    if (isChickenCodeQuery) {
-      setNotice('Chicken code not found.')
+    // 6. Search grocery products by exact name
+    const productByName = groceryItems.find(item => item.active && item.name.toLowerCase() === lowerTrimmed)
+    if (productByName) {
+      addGrocery(productByName)
+      setScan('')
+      setNotice('')
+      return
+    }
+
+    // 7. Not found feedback
+    if (num !== null) {
+      if (num < 100) {
+        setNotice(`Chicken cut #${num} not found.`)
+      } else {
+        setNotice(`Grocery product #${num} not found.`)
+      }
     } else {
-      setNotice(`Product not found with barcode / chicken code: "${rawTrimmed}".`)
+      setNotice(`Product not found with code / barcode: "${rawTrimmed}".`)
     }
   }
 
@@ -799,7 +851,7 @@ export function PosPayment({
             total: item.total,
           }
           : {
-            code: null,
+            code: item.product.code || null,
             productId: item.product.id,
             productName: item.product.name,
             productType: 'grocery',
@@ -972,13 +1024,16 @@ export function PosPayment({
     product =>
       product.active &&
       (groceryCategory === 'All' || product.category === groceryCategory) &&
-      (product.name.toLowerCase().includes(search.toLowerCase()) || product.barcode.includes(search))
+      (product.name.toLowerCase().includes(search.toLowerCase()) ||
+        product.barcode.includes(search) ||
+        (product.code && product.code.includes(search)))
   )
   const chickenResults = chickenItems.filter(
     item =>
       item.active &&
       (item.name.toLowerCase().includes(chickenSearch.toLowerCase()) ||
-        item.cut.toLowerCase().includes(chickenSearch.toLowerCase()))
+        item.cut.toLowerCase().includes(chickenSearch.toLowerCase()) ||
+        (item.code && item.code.includes(chickenSearch)))
   )
 
   const selectedWeight = parseWeightInGrams(grams)
@@ -1041,7 +1096,7 @@ export function PosPayment({
             <input
               value={scan}
               onChange={event => handleScanChange(event.target.value)}
-              placeholder="Enter Chicken Code (e.g. 002) or scan barcode..."
+              placeholder="Enter Code (Chicken 1+, Grocery 100+) or scan barcode..."
               autoFocus
             />
             {scan && (
@@ -1284,6 +1339,7 @@ export function PosPayment({
                           disabled={isOut}
                         >
                           <div className="card-top">
+                            <span className="product-code-badge">#{product.code}</span>
                             <span className="product-title">{product.name}</span>
                             <span className="product-category-tag">{product.category}</span>
                           </div>
