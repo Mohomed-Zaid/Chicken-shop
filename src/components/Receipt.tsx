@@ -333,14 +333,12 @@ export function ReceiptPreview({
   sale,
   close,
   newSale,
-  autoPrint = false,
 }: {
   sale: Sale
   close: () => void
   newSale?: () => void
   autoPrint?: boolean
 }) {
-  const settings = loadReceiptSettings()
 
   // Automatically print the invoice immediately after sale completion
   useEffect(() => {
