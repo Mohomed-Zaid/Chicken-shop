@@ -22,7 +22,7 @@ import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/c
 import { groceryStore, ensureGroceryCodes, type GroceryProduct } from './data/grocery'
 import { storageAdapter } from './services/storageAdapter'
 import { Sales } from './components/Sales'
-import { getProducts, saveProducts } from './services/supabase/productService'
+import { getProducts, saveProducts, deleteProduct } from './services/supabase/productService'
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
 import { fetchSalesFromSupabase } from './services/supabase/salesService'
 import './index.css'
@@ -218,6 +218,18 @@ export default function App() {
           ? grocery.map(item => item.id === id ? { ...product, stockQuantity: item.stockQuantity, id, createdAt: item.createdAt, updatedAt: new Date().toISOString() } : item)
           : [...grocery, { ...product, id: `grocery-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]
       ),
+    onDelete: async (id: string) => {
+      const next = grocery.filter(item => item.id !== id)
+      setGrocery(next)
+      groceryStore.save(next)
+      if (storageAdapter.isSupabase()) {
+        try {
+          await deleteProduct(id)
+        } catch (err) {
+          console.error('Failed to delete product from Supabase:', err)
+        }
+      }
+    },
   }
 
 

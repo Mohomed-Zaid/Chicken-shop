@@ -23,3 +23,11 @@ export async function upsertRows<T extends Record<string, unknown>>(table: strin
   }
   return (data || []) as T[]
 }
+
+export async function deleteRow(table: string, id: string): Promise<void> {
+  const { error } = await requireSupabase().from(table).delete().eq('id', id)
+  if (error) {
+    console.error(`Unable to delete from ${table}:`, error)
+    throw new Error(error.message || `Unable to delete from ${table}.`)
+  }
+}

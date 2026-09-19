@@ -522,9 +522,70 @@ export function PosPayment({
   const [collisionOrder, setCollisionOrder] = useState<HeldOrder | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [autoPrintAfterSale, setAutoPrintAfterSale] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const scanInputRef = useRef<HTMLInputElement>(null)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
   const barcodeBufferRef = useRef<string>('')
   const lastKeyTimeRef = useRef<number>(0)
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  type SearchSuggestion =
+    | { kind: 'chicken'; item: ChickenItem }
+    | { kind: 'grocery'; item: GroceryProduct }
+
+  // Live suggestions across chicken cuts and grocery items
+  const suggestions = useMemo<SearchSuggestion[]>(() => {
+    const clean = scan.trim().toLowerCase()
+    if (!clean) return []
+
+    const chickenMatches: SearchSuggestion[] = chickenItems
+      .filter(
+        item =>
+          item.active &&
+          (item.name.toLowerCase().includes(clean) ||
+            item.cut.toLowerCase().includes(clean) ||
+            (item.code && item.code.toLowerCase().includes(clean)))
+      )
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(clean) || a.cut.toLowerCase().startsWith(clean)
+        const bStarts = b.name.toLowerCase().startsWith(clean) || b.cut.toLowerCase().startsWith(clean)
+        if (aStarts && !bStarts) return -1
+        if (!aStarts && bStarts) return 1
+        return a.name.localeCompare(b.name)
+      })
+      .map(item => ({ kind: 'chicken', item }))
+
+    const groceryMatches: SearchSuggestion[] = groceryItems
+      .filter(
+        item =>
+          item.active &&
+          (item.name.toLowerCase().includes(clean) ||
+            item.barcode.toLowerCase().includes(clean) ||
+            (item.code && item.code.toLowerCase().includes(clean)) ||
+            (item.category && item.category.toLowerCase().includes(clean)))
+      )
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(clean)
+        const bStarts = b.name.toLowerCase().startsWith(clean)
+        if (aStarts && !bStarts) return -1
+        if (!aStarts && bStarts) return 1
+        return a.name.localeCompare(b.name)
+      })
+      .map(item => ({ kind: 'grocery', item }))
+
+    return [...chickenMatches, ...groceryMatches].slice(0, 10)
+  }, [scan, chickenItems, groceryItems])
 
   // Synchronize held orders across tabs and triggers
   useEffect(() => {
@@ -599,11 +660,16 @@ export function PosPayment({
     if (found && found.quantity >= product.stockQuantity)
       return setNotice(`Insufficient stock for ${product.name}. Available: ${product.stockQuantity}`)
 
+    const hasDiscount = Boolean(
+      product.discountPrice && product.discountPrice > 0 && product.discountPrice < product.sellingPrice
+    )
+    const unitPrice = hasDiscount ? product.discountPrice! : product.sellingPrice
+
     setCart(current =>
       found
         ? current.map(item =>
           item.id === found.id
-            ? { ...found, quantity: found.quantity + 1, total: (found.quantity + 1) * product.sellingPrice }
+            ? { ...found, quantity: found.quantity + 1, total: (found.quantity + 1) * unitPrice }
             : item
         )
         : [
@@ -613,7 +679,7 @@ export function PosPayment({
             kind: 'grocery',
             product,
             quantity: 1,
-            total: product.sellingPrice,
+            total: unitPrice,
           },
         ]
     )
@@ -632,8 +698,14 @@ export function PosPayment({
         setNotice(`Maximum available stock reached for ${item.product.name}.`)
         return current
       }
+      const hasDiscount = Boolean(
+        item.product.discountPrice &&
+        item.product.discountPrice > 0 &&
+        item.product.discountPrice < item.product.sellingPrice
+      )
+      const unitPrice = hasDiscount ? item.product.discountPrice! : item.product.sellingPrice
       return current.map(i =>
-        i.id === item.id ? { ...item, quantity: nextQty, total: nextQty * item.product.sellingPrice } : i
+        i.id === item.id ? { ...item, quantity: nextQty, total: nextQty * unitPrice } : i
       )
     })
   }
@@ -769,8 +841,62 @@ export function PosPayment({
     return false
   }
 
+  const handleSelectSuggestion = (suggestion: SearchSuggestion) => {
+    if (suggestion.kind === 'chicken') {
+      setSelected(suggestion.item)
+      setGrams('')
+      setScan('')
+      setShowSuggestions(false)
+      setHighlightedIndex(-1)
+      barcodeBufferRef.current = ''
+      setNotice('')
+    } else {
+      addGrocery(suggestion.item)
+      setScan('')
+      setShowSuggestions(false)
+      setHighlightedIndex(-1)
+      barcodeBufferRef.current = ''
+      setNotice('')
+      scanInputRef.current?.focus()
+    }
+  }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHighlightedIndex(prev => (prev + 1) % suggestions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHighlightedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length)
+        return
+      }
+      if (e.key === 'Enter') {
+        if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+          e.preventDefault()
+          handleSelectSuggestion(suggestions[highlightedIndex])
+          return
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowSuggestions(false)
+        return
+      }
+    }
+  }
+
   const handleScanChange = (val: string) => {
     setScan(val)
+    if (val.trim()) {
+      setShowSuggestions(true)
+      setHighlightedIndex(0)
+    } else {
+      setShowSuggestions(false)
+      setHighlightedIndex(-1)
+    }
     const trimmed = val.trim()
     if (!trimmed) return
 
@@ -781,6 +907,7 @@ export function PosPayment({
     if (exactBarcodeMatch) {
       addGrocery(exactBarcodeMatch)
       setScan('')
+      setShowSuggestions(false)
       barcodeBufferRef.current = ''
       setNotice('')
       return
@@ -793,6 +920,7 @@ export function PosPayment({
         setSelected(match)
         setGrams('')
         setScan('')
+        setShowSuggestions(false)
         barcodeBufferRef.current = ''
         setNotice('')
       }
@@ -802,7 +930,10 @@ export function PosPayment({
   const submitScan = (event?: FormEvent) => {
     if (event) event.preventDefault()
     if (!scan.trim()) return
-    processBarcodeOrCode(scan)
+    const processed = processBarcodeOrCode(scan)
+    if (!processed && suggestions.length > 0) {
+      handleSelectSuggestion(suggestions[0])
+    }
   }
 
   const completeSale = async (paymentMethod: PaymentMethod, amountReceived: number) => {
@@ -840,14 +971,24 @@ export function PosPayment({
             productType: 'grocery',
             quantity: item.quantity,
             weightGrams: null,
-            unitPrice: item.product.sellingPrice,
+            unitPrice:
+              item.product.discountPrice &&
+                item.product.discountPrice > 0 &&
+                item.product.discountPrice < item.product.sellingPrice
+                ? item.product.discountPrice
+                : item.product.sellingPrice,
             pricePerKg: null,
             costPrice: item.product.costPrice,
             total: item.total,
           }
       )
 
+      const regularSubtotal = cart.reduce((sum, item) => {
+        if (item.kind === 'chicken') return sum + item.total
+        return sum + (item.product.sellingPrice * item.quantity)
+      }, 0)
       const total = cart.reduce((sum, item) => sum + item.total, 0)
+      const discount = Math.max(0, regularSubtotal - total)
       let initialInvoice = salesStore.getNextInvoice()
       if (storageAdapter.isSupabase()) {
         try {
@@ -863,8 +1004,8 @@ export function PosPayment({
         date: toLocalDateString(),
         time: new Date().toLocaleTimeString(),
         items,
-        subtotal: total,
-        discount: 0,
+        subtotal: regularSubtotal,
+        discount,
         tax: 0,
         service: 0,
         total,
@@ -945,7 +1086,18 @@ export function PosPayment({
     }
   }
 
-  const total = cart.reduce((sum, item) => sum + item.total, 0)
+  const regularSubtotal = useMemo(() => {
+    return cart.reduce((sum, item) => {
+      if (item.kind === 'chicken') return sum + item.total
+      return sum + item.product.sellingPrice * item.quantity
+    }, 0)
+  }, [cart])
+
+  const total = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.total, 0)
+  }, [cart])
+
+  const totalDiscount = Math.max(0, regularSubtotal - total)
 
   const handleDirectPrintSale = async () => {
     if (!cart.length || isSubmitting) return
@@ -1247,31 +1399,136 @@ export function PosPayment({
             </div>
           </header>
 
-          {/* Barcode / Chicken Code Search Box */}
-          <form className="pos-search-bar" onSubmit={submitScan}>
-            <span className="search-icon">🔍</span>
-            <input
-              ref={scanInputRef}
-              value={scan}
-              onChange={event => handleScanChange(event.target.value)}
-              placeholder="Scan barcode or enter code (Chicken 1+, Grocery 100+)..."
-              autoFocus
-            />
-            {scan && (
-              <button
-                type="button"
-                className="btn-clear-search"
-                onClick={() => {
-                  setScan('')
-                  barcodeBufferRef.current = ''
-                  scanInputRef.current?.focus()
+          {/* Barcode / Chicken Code Search Box with Live Dropdown */}
+          <div className="pos-search-wrapper" ref={searchContainerRef}>
+            <form className="pos-search-bar" onSubmit={submitScan}>
+              <span className="search-icon">🔍</span>
+              <input
+                ref={scanInputRef}
+                value={scan}
+                onChange={event => handleScanChange(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                onFocus={() => {
+                  if (scan.trim().length >= 1) setShowSuggestions(true)
                 }}
-              >
-                ×
-              </button>
+                placeholder="Scan barcode or search wings, chicken, grocery..."
+                autoFocus
+              />
+              {scan && (
+                <button
+                  type="button"
+                  className="btn-clear-search"
+                  onClick={() => {
+                    setScan('')
+                    setShowSuggestions(false)
+                    barcodeBufferRef.current = ''
+                    scanInputRef.current?.focus()
+                  }}
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+              <kbd className="kbd-enter">Enter</kbd>
+            </form>
+
+            {/* LIVE AUTOCOMPLETE DROPDOWN */}
+            {showSuggestions && scan.trim().length >= 1 && (
+              <div className="pos-search-dropdown">
+                <div className="pos-dropdown-header">
+                  <span>
+                    Suggestions for <strong>"{scan}"</strong> ({suggestions.length})
+                  </span>
+                  <small>↑↓ to navigate · Enter or Click to select</small>
+                </div>
+
+                {suggestions.length > 0 ? (
+                  <div className="pos-dropdown-list">
+                    {suggestions.map((s, idx) => {
+                      const isHighlighted = highlightedIndex === idx
+                      if (s.kind === 'chicken') {
+                        const item = s.item
+                        return (
+                          <button
+                            type="button"
+                            key={`s-c-${item.id}`}
+                            className={`pos-dropdown-item ${isHighlighted ? 'highlighted' : ''}`}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            onClick={() => handleSelectSuggestion(s)}
+                          >
+                            <div className="pos-dropdown-item-left">
+                              <span className="pos-dropdown-badge chicken">🍗 CHICKEN</span>
+                              <div className="pos-dropdown-item-info">
+                                <span className="pos-dropdown-item-name">{item.name}</span>
+                                <span className="pos-dropdown-item-sub">
+                                  Cut #{item.code || 'CH--'} · {item.cut || item.name}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="pos-dropdown-item-right">
+                              <span className="pos-dropdown-price">{formatMoney(item.pricePerKg)}/kg</span>
+                              <span className="pos-dropdown-action-hint">Choose weight →</span>
+                            </div>
+                          </button>
+                        )
+                      } else {
+                        const item = s.item
+                        const isOut = item.stockQuantity <= 0
+                        const isLow = item.stockQuantity <= item.lowStockLevel && !isOut
+                        const isDiscounted = Boolean(
+                          item.discountPrice &&
+                          item.discountPrice > 0 &&
+                          item.discountPrice < item.sellingPrice
+                        )
+
+                        return (
+                          <button
+                            type="button"
+                            key={`s-g-${item.id}`}
+                            className={`pos-dropdown-item ${isHighlighted ? 'highlighted' : ''}`}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            onClick={() => handleSelectSuggestion(s)}
+                            disabled={isOut}
+                          >
+                            <div className="pos-dropdown-item-left">
+                              <span className="pos-dropdown-badge grocery">🛒 GROCERY</span>
+                              <div className="pos-dropdown-item-info">
+                                <span className="pos-dropdown-item-name">{item.name}</span>
+                                <span className="pos-dropdown-item-sub">
+                                  #{item.code} · {item.category} {item.barcode ? `· ${item.barcode}` : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="pos-dropdown-item-right">
+                              {isDiscounted ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <del style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                    {formatMoney(item.sellingPrice)}
+                                  </del>
+                                  <span className="pos-dropdown-price" style={{ color: '#10b981' }}>
+                                    {formatMoney(item.discountPrice!)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="pos-dropdown-price">{formatMoney(item.sellingPrice)}</span>
+                              )}
+                              <span className={`pos-dropdown-stock ${isOut ? 'out' : isLow ? 'low' : ''}`}>
+                                {isOut ? 'OUT OF STOCK' : `Stock: ${item.stockQuantity} ${item.unit || 'pcs'}`}
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      }
+                    })}
+                  </div>
+                ) : (
+                  <div className="pos-dropdown-empty">
+                    <span>No chicken cuts or products matching "{scan}"</span>
+                  </div>
+                )}
+              </div>
             )}
-            <kbd className="kbd-enter">Enter</kbd>
-          </form>
+          </div>
 
           {notice && <div className="pos-notice">{notice}</div>}
 
@@ -1306,9 +1563,22 @@ export function PosPayment({
                     </div>
 
                     <div className="col-rate">
-                      {item.kind === 'chicken'
-                        ? `${formatMoney(item.pricePerKg)}/kg`
-                        : formatMoney(item.product.sellingPrice)}
+                      {item.kind === 'chicken' ? (
+                        `${formatMoney(item.pricePerKg)}/kg`
+                      ) : item.product.discountPrice &&
+                        item.product.discountPrice > 0 &&
+                        item.product.discountPrice < item.product.sellingPrice ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
+                          <del style={{ color: '#94a3b8', fontSize: '11px', textDecoration: 'line-through' }}>
+                            {formatMoney(item.product.sellingPrice)}
+                          </del>
+                          <span style={{ color: '#10b981', fontWeight: 700 }}>
+                            {formatMoney(item.product.discountPrice)}
+                          </span>
+                        </div>
+                      ) : (
+                        formatMoney(item.product.sellingPrice)
+                      )}
                     </div>
 
                     <div className="col-qty">
@@ -1366,11 +1636,13 @@ export function PosPayment({
             <div className="pos-summary-table">
               <div className="summary-row">
                 <span>Subtotal:</span>
-                <b>{formatMoney(total)}</b>
+                <b>{formatMoney(regularSubtotal)}</b>
               </div>
               <div className="summary-row">
                 <span>Discount:</span>
-                <span>Rs. 0.00</span>
+                <span style={{ color: totalDiscount > 0 ? '#10b981' : undefined, fontWeight: totalDiscount > 0 ? 600 : undefined }}>
+                  {totalDiscount > 0 ? `-${formatMoney(totalDiscount)}` : 'Rs. 0.00'}
+                </span>
               </div>
               <div className="summary-row grand-total-row">
                 <span className="total-label">TOTAL AMOUNT</span>
@@ -1524,7 +1796,25 @@ export function PosPayment({
                           </div>
 
                           <div className="card-bottom">
-                            <b className="product-price">{formatMoney(product.sellingPrice)}</b>
+                            {product.discountPrice &&
+                              product.discountPrice > 0 &&
+                              product.discountPrice < product.sellingPrice ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <del style={{ color: '#94a3b8', fontSize: '11px', textDecoration: 'line-through' }}>
+                                    {formatMoney(product.sellingPrice)}
+                                  </del>
+                                  <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                    SAVE {formatMoney(product.sellingPrice - product.discountPrice)}
+                                  </span>
+                                </div>
+                                <b className="product-price" style={{ color: '#10b981' }}>
+                                  {formatMoney(product.discountPrice)}
+                                </b>
+                              </div>
+                            ) : (
+                              <b className="product-price">{formatMoney(product.sellingPrice)}</b>
+                            )}
                             <div className="product-stock-tag">
                               {isOut ? (
                                 <span className="stock-pill out">OUT OF STOCK</span>

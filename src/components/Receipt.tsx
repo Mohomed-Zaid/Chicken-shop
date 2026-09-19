@@ -175,7 +175,7 @@ export function Receipt({ sale }: { sale: Sale }) {
             autoPrintReceipt: row.auto_print_receipt ?? prev.autoPrintReceipt,
           }))
         })
-        .catch(() => {})
+        .catch(() => { })
     }
     return () => {
       mounted = false

@@ -6,6 +6,7 @@ export interface GroceryProduct {
   barcode: string
   costPrice: number
   sellingPrice: number
+  discountPrice?: number | null
   stockQuantity: number
   lowStockLevel: number
   unit: string

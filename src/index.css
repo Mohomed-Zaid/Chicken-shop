@@ -4694,12 +4694,16 @@ button {
   border-color: #f3b625;
 }
 
-/* Search Bar */
+/* Search Bar & Dropdown */
+.pos-search-wrapper {
+  position: relative;
+  margin: 10px 14px 6px;
+}
+
 .pos-search-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 10px 14px 6px;
   background: #0e161f;
   border: 1px solid #314253;
   border-radius: 6px;
@@ -4711,6 +4715,170 @@ button {
 .pos-search-bar:focus-within {
   border-color: #f3b625;
   box-shadow: 0 0 0 1px #f3b625;
+}
+
+/* POS Live Autocomplete Dropdown */
+.pos-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #111a24;
+  border: 1px solid #2d4154;
+  border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(243, 182, 37, 0.25);
+  z-index: 1000;
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #0a1118;
+  border-bottom: 1px solid #1c2b3a;
+  font-size: 11px;
+  color: #8b9ea9;
+}
+
+.pos-dropdown-header strong {
+  color: #f3b625;
+}
+
+.pos-dropdown-header small {
+  color: #657788;
+  font-size: 10px;
+}
+
+.pos-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 2px;
+}
+
+.pos-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+  width: 100%;
+  gap: 12px;
+}
+
+.pos-dropdown-item:hover,
+.pos-dropdown-item.highlighted {
+  background: #192a3b;
+  outline: none;
+}
+
+.pos-dropdown-item.highlighted {
+  border-left: 3px solid #f3b625;
+  padding-left: 7px;
+}
+
+.pos-dropdown-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pos-dropdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.pos-dropdown-badge.chicken {
+  background: rgba(243, 182, 37, 0.18);
+  color: #f3b625;
+  border: 1px solid rgba(243, 182, 37, 0.35);
+}
+
+.pos-dropdown-badge.grocery {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.pos-dropdown-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pos-dropdown-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-dropdown-item-sub {
+  font-size: 11px;
+  color: #8b9ea9;
+}
+
+.pos-dropdown-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.pos-dropdown-price {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.pos-dropdown-action-hint {
+  font-size: 10px;
+  color: #f3b625;
+  font-weight: 700;
+}
+
+.pos-dropdown-stock {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.pos-dropdown-stock.out {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.pos-dropdown-stock.low {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.pos-dropdown-empty {
+  padding: 18px;
+  text-align: center;
+  color: #8b9ea9;
+  font-size: 12px;
 }
 
 .search-icon {
@@ -5516,17 +5684,22 @@ button {
 
 .thermal-80mm {
   background: #ffffff;
-  color: #000000;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   padding: 12px 14px;
-  font-family: 'Segoe UI', 'Noto Sans Sinhala', 'Nirmala UI', -apple-system, BlinkMacSystemFont, 'Courier New', sans-serif;
-  font-size: 11.5px;
+  font-family: 'Segoe UI', 'Noto Sans Sinhala', 'Nirmala UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.35;
   box-sizing: border-box;
   color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 .thermal-80mm * {
-  color: #000000;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   box-sizing: border-box;
 }
 
@@ -5545,19 +5718,22 @@ button {
 }
 
 .thermal-business-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   margin: 0 0 3px;
-  color: #000000;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   letter-spacing: -0.2px;
   text-transform: uppercase;
   line-height: 1.2;
 }
 
 .thermal-business-info {
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 700;
   margin: 0;
-  color: #111111;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   line-height: 1.35;
   display: flex;
   flex-direction: column;
@@ -5565,12 +5741,13 @@ button {
 }
 
 .thermal-business-info strong {
-  font-weight: 700;
+  font-weight: 900;
+  color: #000000 !important;
 }
 
 .thermal-divider-dashed {
   border: none;
-  border-top: 1px dashed #000000;
+  border-top: 1.5px dashed #000000;
   margin: 6px 0;
   height: 0;
   width: 100%;
@@ -5579,8 +5756,8 @@ button {
 .thermal-meta-grid {
   display: flex;
   flex-direction: column;
-  gap: 2.5px;
-  font-size: 11px;
+  gap: 3px;
+  font-size: 11.5px;
 }
 
 .thermal-meta-row {
@@ -5590,37 +5767,45 @@ button {
 }
 
 .thermal-meta-row .meta-label {
-  color: #222222;
-  font-weight: 600;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  font-weight: 800;
 }
 
 .thermal-meta-row .meta-value {
-  font-weight: 700;
-  color: #000000;
+  font-weight: 800;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .thermal-meta-row.invoice-row .meta-value.bold-invoice {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 900;
   letter-spacing: 0.5px;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .subscription-dates-row .meta-value {
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .thermal-items-container {
-  margin: 2px 0;
+  margin: 3px 0;
 }
 
 .thermal-items-header {
   display: flex;
   justify-content: space-between;
-  font-weight: 800;
-  font-size: 10px;
+  font-weight: 900;
+  font-size: 11px;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   border: none;
-  padding-bottom: 3px;
-  margin-bottom: 5px;
+  border-bottom: 1.5px solid #000000;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .thermal-items-header .col-desc {
@@ -5630,32 +5815,35 @@ button {
 
 .thermal-items-header .col-calc {
   text-align: left;
-  font-size: 9.5px;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .thermal-items-header .col-total {
   text-align: right;
   min-width: 65px;
+  font-weight: 900;
 }
 
 .thermal-items-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .thermal-item-row {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 1.5px;
   page-break-inside: avoid;
   break-inside: avoid;
 }
 
 .thermal-item-row .item-name-line {
-  font-weight: 700;
-  font-size: 11.5px;
-  color: #000000;
+  font-weight: 800;
+  font-size: 12px;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   line-height: 1.25;
   word-break: break-word;
 }
@@ -5664,19 +5852,22 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .thermal-item-row .item-rate {
   font-family: monospace, sans-serif;
-  font-size: 10.5px;
-  color: #222222;
+  font-size: 11px;
+  font-weight: 800;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .thermal-item-row .item-total {
-  font-weight: 800;
-  font-size: 11.5px;
-  color: #000000;
+  font-weight: 900;
+  font-size: 12.5px;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -5684,71 +5875,91 @@ button {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .thermal-summary-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  font-weight: 800;
 }
 
 .thermal-summary-row.counts-row {
-  font-size: 10.5px;
-  color: #333333;
+  font-size: 11px;
+  font-weight: 700;
+  color: #000000 !important;
 }
 
 .thermal-summary-row.discount-row {
-  font-weight: 700;
-  color: #000000;
+  font-weight: 800;
+  color: #000000 !important;
 }
 
 .thermal-grand-total {
   border: none;
+  border-top: 1.5px solid #000000;
+  border-bottom: 1.5px solid #000000;
   padding: 6px 0;
   margin: 6px 0 4px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 900;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .grand-total-label {
   display: flex;
   flex-direction: column;
   line-height: 1.1;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 900;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .grand-total-label small {
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.5px;
-  font-weight: 800;
+  font-weight: 900;
+  color: #000000 !important;
 }
 
 .grand-total-value {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.3px;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .thermal-payment-block {
   display: flex;
   flex-direction: column;
-  gap: 2.5px;
-  font-size: 11px;
-  margin-top: 3px;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  margin-top: 4px;
 }
 
 .thermal-payment-block .change-row {
-  font-weight: 800;
-  font-size: 11.5px;
+  font-weight: 900;
+  font-size: 12px;
+  color: #000000 !important;
 }
 
 .thermal-payment-block .change-amount {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 900;
+  color: #000000 !important;
 }
 
 .thermal-barcode-section {
@@ -5771,21 +5982,26 @@ button {
 
 .receipt-barcode-text {
   font-family: monospace;
-  font-size: 10px;
+  font-size: 10.5px;
   letter-spacing: 2px;
-  font-weight: 700;
+  font-weight: 800;
+  color: #000000 !important;
 }
 
 .thermal-footer {
   text-align: center;
-  font-size: 10px;
-  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 8px;
   line-height: 1.35;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
 }
 
 .thermal-footer .footer-line {
   margin: 2px 0;
-  font-weight: 600;
+  font-weight: 800;
+  color: #000000 !important;
 }
 
 .footer-subscription-dates {
@@ -6025,7 +6241,9 @@ button {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
-    font-size: 11px !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
     line-height: 1.35 !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
@@ -6034,6 +6252,8 @@ button {
     outline: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .receipt *,
@@ -6041,9 +6261,11 @@ button {
   .sinhala-receipt * {
     visibility: visible !important;
     color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     box-sizing: border-box !important;
+    text-shadow: 0 0 0.35px #000000 !important;
   }
 
   /* Force horizontal flex layout during browser printing */
@@ -6062,23 +6284,41 @@ button {
   .thermal-grand-total {
     align-items: center !important;
     border: none !important;
-    padding: 4px 0 !important;
-    margin: 5px 0 4px !important;
+    border-top: 1.5px solid #000000 !important;
+    border-bottom: 1.5px solid #000000 !important;
+    padding: 5px 0 !important;
+    margin: 6px 0 4px !important;
+  }
+
+  .thermal-items-header {
+    border-bottom: 1.5px solid #000000 !important;
+    padding-bottom: 3px !important;
+    font-weight: 900 !important;
   }
 
   .thermal-items-header .col-desc {
     flex: 1 1 auto !important;
     text-align: left !important;
+    font-weight: 900 !important;
   }
 
   .thermal-items-header .col-calc {
     text-align: left !important;
-    font-size: 9.5px !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
   }
 
   .thermal-items-header .col-total {
     text-align: right !important;
     min-width: 65px !important;
+    font-weight: 900 !important;
+  }
+
+  .thermal-item-row .item-name-line {
+    font-weight: 900 !important;
+    font-size: 12px !important;
+    color: #000000 !important;
+    text-shadow: 0 0 0.5px #000000 !important;
   }
 
   .thermal-item-row .item-sub-line {
@@ -6088,24 +6328,41 @@ button {
 
   .thermal-item-row .item-rate {
     font-family: monospace, sans-serif !important;
-    font-size: 10px !important;
-    color: #222222 !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 
   .thermal-item-row .item-total {
-    font-weight: 800 !important;
-    font-size: 11px !important;
+    font-weight: 900 !important;
+    font-size: 12.5px !important;
     text-align: right !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 
   .thermal-header b,
   .thermal-business-name,
   .thermal-grand-total,
+  .grand-total-label,
+  .grand-total-value,
   .thermal-footer,
   .receipt strong,
   .bold-invoice {
     color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
     font-weight: 900 !important;
+    text-shadow: 0 0 0.5px #000000 !important;
+  }
+
+  .thermal-meta-row .meta-label,
+  .thermal-meta-row .meta-value,
+  .thermal-summary-row,
+  .thermal-business-info {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 800 !important;
   }
 
   .thermal-divider-dashed {
@@ -6911,6 +7168,28 @@ button {
   background: #ef4444;
   color: #ffffff;
   border-color: #ef4444;
+}
+
+.btn-delete-product {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-delete-product:hover {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
 }
 
 /* Collision Resolution Modal */
