@@ -57,15 +57,36 @@ export function Settings() {
     setSaving(true)
     setSaveNotice('')
     setSaveError('')
+
+    // 1. Always persist locally immediately so POS and thermal receipts update without interruption
+    storageAdapter.writeLocal('business_settings', settings)
+    try {
+      localStorage.setItem('business-settings', JSON.stringify({
+        businessName: settings.business_name,
+        address: settings.address,
+        phone: settings.phone,
+        email: settings.email,
+        footerMessage: settings.footer_message,
+        autoPrintReceipt: settings.auto_print_receipt,
+        showCustomer: settings.show_customer,
+        showCashier: settings.show_cashier,
+        showPaymentMethod: settings.show_payment_method,
+      }))
+    } catch {}
+
+    // 2. Sync to Supabase if in online/Supabase mode
     try {
       if (storageAdapter.isSupabase()) {
-        await saveBusinessSettings(settings)
-      } else {
-        storageAdapter.writeLocal('business_settings', settings)
+        await saveBusinessSettings({
+          ...settings,
+          updated_at: new Date().toISOString(),
+        })
       }
       setSaveNotice('Settings saved successfully.')
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save settings.')
+      console.warn('Supabase settings sync error:', err)
+      const msg = err instanceof Error ? err.message : 'Database permission restriction'
+      setSaveNotice(`Settings saved locally. Note: Cloud sync pending (${msg}). Please apply migration 009 in Supabase SQL editor.`)
     } finally {
       setSaving(false)
     }

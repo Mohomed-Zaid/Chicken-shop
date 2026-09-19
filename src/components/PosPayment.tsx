@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type FormEvent } from 'react'
+import { useEffect, useState, useMemo, useRef, type FormEvent } from 'react'
 import { calculateChickenPrice, formatMoney, findChickenByCode, type ChickenCartItem, type ChickenItem } from '../data/chicken'
 import { groceryStore, findGroceryByCode, type GroceryProduct } from '../data/grocery'
 import { salesStore, toLocalDateString, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
@@ -102,31 +102,15 @@ function PaymentModal({
   onComplete: (method: PaymentMethod, received: number) => void
 }) {
   const [method, setMethod] = useState<PaymentMethod>('Cash')
-  const [received, setReceived] = useState(String(total))
   const [error, setError] = useState('')
   const [processing, setProcessing] = useState(false)
-
-  const parsedReceived = Number(received) || 0
-  const change = Math.max(0, parsedReceived - total)
-
-  const quickDenominations = useMemo(() => {
-    const list = [total]
-    if (total < 500) list.push(500)
-    if (total < 1000) list.push(1000)
-    if (total < 2000) list.push(2000)
-    if (total < 5000) list.push(5000)
-    return Array.from(new Set(list)).sort((a, b) => a - b)
-  }, [total])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (processing) return
-    const amount = method === 'Cash' ? Number(received) : total
-    if (method === 'Cash' && amount < total) return setError('Amount received cannot be less than total.')
-    if (!Number.isFinite(amount)) return setError('Enter a valid amount.')
     setProcessing(true)
     setError('')
-    onComplete(method, amount)
+    onComplete(method, total)
   }
 
   return (
@@ -165,7 +149,6 @@ function PaymentModal({
                 className={`method-btn ${method === 'Card' ? 'active' : ''}`}
                 onClick={() => {
                   setMethod('Card')
-                  setReceived(String(total))
                   setError('')
                 }}
                 disabled={processing}
@@ -177,7 +160,6 @@ function PaymentModal({
                 className={`method-btn ${method === 'Other' ? 'active' : ''}`}
                 onClick={() => {
                   setMethod('Other')
-                  setReceived(String(total))
                   setError('')
                 }}
                 disabled={processing}
@@ -188,45 +170,9 @@ function PaymentModal({
           </div>
 
           {method === 'Cash' && (
-            <div className="cash-input-section">
-              <label>
-                AMOUNT RECEIVED (RS.)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={received}
-                  onChange={event => {
-                    setReceived(event.target.value)
-                    setError('')
-                  }}
-                  autoFocus
-                  disabled={processing}
-                />
-              </label>
-
-              <div className="quick-cash-chips">
-                {quickDenominations.map(amt => (
-                  <button
-                    type="button"
-                    key={amt}
-                    className={`cash-chip ${Number(received) === amt ? 'selected' : ''}`}
-                    onClick={() => {
-                      setReceived(String(amt))
-                      setError('')
-                    }}
-                  >
-                    {amt === total ? `Exact (${formatMoney(amt)})` : formatMoney(amt)}
-                  </button>
-                ))}
-              </div>
-
-              <div className="change-return-box">
-                <span>CHANGE TO RETURN</span>
-                <b className={`change-amount ${change > 0 ? 'positive' : ''}`}>
-                  {formatMoney(change)}
-                </b>
-              </div>
+            <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(232, 170, 21, 0.08)', borderRadius: '8px', border: '1px solid rgba(232, 170, 21, 0.25)', marginTop: '12px' }}>
+              <span style={{ fontSize: '12px', color: '#9bb1c4', display: 'block', marginBottom: '4px' }}>EXACT CASH PAYMENT</span>
+              <b style={{ fontSize: '24px', color: '#f3b625', fontWeight: 900 }}>{formatMoney(total)}</b>
             </div>
           )}
 
@@ -239,7 +185,7 @@ function PaymentModal({
             Cancel
           </button>
           <button className="confirm btn-complete-sale" disabled={processing}>
-            {processing ? 'Processing...' : `Complete Sale · ${formatMoney(total)}`}
+            {processing ? 'Processing...' : `🖨️ Complete Sale & Print · ${formatMoney(total)}`}
           </button>
         </footer>
       </form>
@@ -247,8 +193,18 @@ function PaymentModal({
   )
 }
 
-function SaleSuccess({ sale, onNewSale, onClose }: { sale: Sale; onNewSale: () => void; onClose: () => void }) {
-  return <ReceiptPreview sale={sale} close={onClose} newSale={onNewSale} />
+function SaleSuccess({
+  sale,
+  onNewSale,
+  onClose,
+  autoPrint = false,
+}: {
+  sale: Sale
+  onNewSale: () => void
+  onClose: () => void
+  autoPrint?: boolean
+}) {
+  return <ReceiptPreview sale={sale} close={onClose} newSale={onNewSale} autoPrint={autoPrint} />
 }
 
 function formatHoldTime(isoString: string): string {
@@ -564,6 +520,11 @@ export function PosPayment({
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false)
   const [isRecallModalOpen, setIsRecallModalOpen] = useState(false)
   const [collisionOrder, setCollisionOrder] = useState<HeldOrder | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [autoPrintAfterSale, setAutoPrintAfterSale] = useState(false)
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const barcodeBufferRef = useRef<string>('')
+  const lastKeyTimeRef = useRef<number>(0)
 
   // Synchronize held orders across tabs and triggers
   useEffect(() => {
@@ -576,27 +537,7 @@ export function PosPayment({
     }
   }, [])
 
-  // Keyboard shortcut: F4 to Hold Current Bill, Alt+H to Hold or Recall
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F4') {
-        e.preventDefault()
-        if (cart.length) {
-          setIsHoldModalOpen(true)
-        }
-      }
-      if (e.altKey && (e.key === 'h' || e.key === 'H')) {
-        e.preventDefault()
-        if (cart.length) {
-          setIsHoldModalOpen(true)
-        } else {
-          setIsRecallModalOpen(true)
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [cart])
+
 
   // Extract unique grocery categories
   const categories = useMemo(() => {
@@ -702,112 +643,117 @@ export function PosPayment({
     setNotice('')
   }
 
-  const handleScanChange = (val: string) => {
-    setScan(val)
-    const trimmed = val.trim()
-    // 1. Fast match for standard barcode scanners (8+ digits)
-    if (/^\d{8,}$/.test(trimmed)) {
-      const product = groceryItems.find(item => item.active && item.barcode === trimmed)
-      if (product) {
-        addGrocery(product)
+  const processBarcodeOrCode = (rawInput: string): boolean => {
+    const rawTrimmed = rawInput.trim()
+    if (!rawTrimmed) return false
+
+    // Clean control characters (\r, \n) often sent by hardware barcode scanners
+    const cleanStr = rawTrimmed.replace(/[\r\n\t]/g, '').trim()
+    if (!cleanStr) return false
+
+    // 1. EXACT BARCODE MATCH FIRST (Highest Priority for barcode scanners)
+    const productByBarcode = groceryItems.find(
+      item => item.active && item.barcode && item.barcode.trim().toLowerCase() === cleanStr.toLowerCase()
+    )
+    if (productByBarcode) {
+      addGrocery(productByBarcode)
+      setScan('')
+      barcodeBufferRef.current = ''
+      setNotice('')
+      return true
+    }
+
+    // Match if barcode had leading zeros (e.g. scanner sends "0479..." or db has "0479...")
+    const cleanNoZero = cleanStr.replace(/^0+/, '')
+    if (cleanNoZero) {
+      const productByBarcodeNoZero = groceryItems.find(
+        item =>
+          item.active &&
+          item.barcode &&
+          item.barcode.trim().replace(/^0+/, '') === cleanNoZero
+      )
+      if (productByBarcodeNoZero) {
+        addGrocery(productByBarcodeNoZero)
         setScan('')
+        barcodeBufferRef.current = ''
         setNotice('')
-        return
+        return true
       }
     }
-    // 2. Fast match for CH... prefixed chicken cuts
-    if (/^CH\d+/i.test(trimmed)) {
-      const match = findChickenByCode(trimmed, chickenItems)
-      if (match && match.active) {
-        setSelected(match)
-        setGrams('')
-        setScan('')
-        setNotice('')
-      }
-    }
-  }
 
-  const submitScan = (event: FormEvent) => {
-    event.preventDefault()
-    const rawTrimmed = scan.trim()
-    if (!rawTrimmed) return
-
-    const num = /^\d+$/.test(rawTrimmed) ? Number(rawTrimmed) : null
-
-    // 1. If numeric < 100 (1-99) or starts with CH: Chicken cut code lookup
-    if ((num !== null && num >= 1 && num < 100) || /^ch/i.test(rawTrimmed)) {
-      const chickenCodeMatch = findChickenByCode(rawTrimmed, chickenItems)
+    // 2. CHICKEN CUT CODE MATCH (1-99 or starting with CH)
+    const num = /^\d+$/.test(cleanStr) ? Number(cleanStr) : null
+    if ((num !== null && num >= 1 && num < 100) || /^ch/i.test(cleanStr)) {
+      const chickenCodeMatch = findChickenByCode(cleanStr, chickenItems)
       if (chickenCodeMatch) {
         if (!chickenCodeMatch.active) {
           setNotice(`Chicken #${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
-          return
+          return false
         }
         setSelected(chickenCodeMatch)
         setGrams('')
         setScan('')
+        barcodeBufferRef.current = ''
         setNotice('')
-        return
+        return true
       }
     }
 
-    // 2. If numeric >= 100: Grocery product code lookup
+    // 3. GROCERY CODE MATCH (PLU code 100, 101, etc.)
     if (num !== null && num >= 100) {
-      const groceryMatch = findGroceryByCode(rawTrimmed, groceryItems)
+      const groceryMatch = findGroceryByCode(cleanStr, groceryItems)
       if (groceryMatch) {
         if (!groceryMatch.active) {
           setNotice(`Grocery #${groceryMatch.code} (${groceryMatch.name}) is inactive.`)
-          return
+          return false
         }
         addGrocery(groceryMatch)
         setScan('')
+        barcodeBufferRef.current = ''
         setNotice('')
-        return
+        return true
       }
     }
 
-    // 3. Fallback code match for chicken (alphanumeric code)
-    const chickenCodeMatch = findChickenByCode(rawTrimmed, chickenItems)
-    if (chickenCodeMatch) {
-      if (!chickenCodeMatch.active) {
-        setNotice(`Chicken #${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
-        return
+    // 4. Fallback chicken alphanumeric code
+    const chickenFallback = findChickenByCode(cleanStr, chickenItems)
+    if (chickenFallback) {
+      if (!chickenFallback.active) {
+        setNotice(`Chicken #${chickenFallback.code} (${chickenFallback.name}) is inactive in Daily Chicken Prices.`)
+        return false
       }
-      setSelected(chickenCodeMatch)
+      setSelected(chickenFallback)
       setGrams('')
       setScan('')
+      barcodeBufferRef.current = ''
       setNotice('')
-      return
+      return true
     }
 
-    // 4. Search chicken cuts by name/cut (e.g. breast, wings)
-    const lowerTrimmed = rawTrimmed.toLowerCase()
+    // 5. Search chicken by name/cut
+    const lowerClean = cleanStr.toLowerCase()
     const chickenNameMatch = chickenItems.find(
-      item => item.active && (item.name.toLowerCase() === lowerTrimmed || item.cut.toLowerCase() === lowerTrimmed)
+      item => item.active && (item.name.toLowerCase() === lowerClean || item.cut.toLowerCase() === lowerClean)
     )
     if (chickenNameMatch) {
       setSelected(chickenNameMatch)
       setGrams('')
       setScan('')
+      barcodeBufferRef.current = ''
       setNotice('')
-      return
+      return true
     }
 
-    // 5. Search grocery products by barcode
-    const productByBarcode = groceryItems.find(item => item.active && item.barcode === rawTrimmed)
-    if (productByBarcode) {
-      addGrocery(productByBarcode)
-      setScan('')
-      setNotice('')
-      return
-    }
-
-    // 6. Search grocery products by exact name
-    const productByName = groceryItems.find(item => item.active && item.name.toLowerCase() === lowerTrimmed)
+    // 6. Search grocery by exact name
+    const productByName = groceryItems.find(
+      item => item.active && item.name.toLowerCase() === lowerClean
+    )
     if (productByName) {
       addGrocery(productByName)
       setScan('')
+      barcodeBufferRef.current = ''
       setNotice('')
-      return
+      return true
     }
 
     // 7. Not found feedback
@@ -818,8 +764,45 @@ export function PosPayment({
         setNotice(`Grocery product #${num} not found.`)
       }
     } else {
-      setNotice(`Product not found with code / barcode: "${rawTrimmed}".`)
+      setNotice(`Product not found with code / barcode: "${cleanStr}".`)
     }
+    return false
+  }
+
+  const handleScanChange = (val: string) => {
+    setScan(val)
+    const trimmed = val.trim()
+    if (!trimmed) return
+
+    // Fast check: if the typed/scanned string matches ANY active grocery barcode exactly, add immediately!
+    const exactBarcodeMatch = groceryItems.find(
+      item => item.active && item.barcode && item.barcode.trim().toLowerCase() === trimmed.toLowerCase()
+    )
+    if (exactBarcodeMatch) {
+      addGrocery(exactBarcodeMatch)
+      setScan('')
+      barcodeBufferRef.current = ''
+      setNotice('')
+      return
+    }
+
+    // Fast check for CH chicken cuts
+    if (/^CH\d+/i.test(trimmed)) {
+      const match = findChickenByCode(trimmed, chickenItems)
+      if (match && match.active) {
+        setSelected(match)
+        setGrams('')
+        setScan('')
+        barcodeBufferRef.current = ''
+        setNotice('')
+      }
+    }
+  }
+
+  const submitScan = (event?: FormEvent) => {
+    if (event) event.preventDefault()
+    if (!scan.trim()) return
+    processBarcodeOrCode(scan)
   }
 
   const completeSale = async (paymentMethod: PaymentMethod, amountReceived: number) => {
@@ -964,6 +947,180 @@ export function PosPayment({
 
   const total = cart.reduce((sum, item) => sum + item.total, 0)
 
+  const handleDirectPrintSale = async () => {
+    if (!cart.length || isSubmitting) return
+    setIsSubmitting(true)
+    setAutoPrintAfterSale(true)
+    try {
+      await completeSale('Cash', total)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Keyboard shortcuts:
+  // F5, F2, F9: Direct Print & Complete Sale
+  // F4: Hold Current Bill
+  // Auto-focus search bar on load and whenever dialogs/modals close
+  useEffect(() => {
+    if (!isHoldModalOpen && !isRecallModalOpen && !selected && !payment && !completed && !collisionOrder) {
+      scanInputRef.current?.focus()
+    }
+  }, [isHoldModalOpen, isRecallModalOpen, selected, payment, completed, collisionOrder, cart])
+
+  // Refocus search bar when user clicks anywhere in POS workspace (unless clicking buttons/inputs/modals)
+  useEffect(() => {
+    const handleWorkspaceClick = (e: MouseEvent) => {
+      if (isHoldModalOpen || isRecallModalOpen || selected || payment || completed || collisionOrder) {
+        return
+      }
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const tag = target.tagName?.toLowerCase()
+      if (
+        ['input', 'textarea', 'select', 'button', 'a'].includes(tag) ||
+        target.closest('button, input, textarea, select, a, dialog, .dialog, .shade')
+      ) {
+        return
+      }
+      scanInputRef.current?.focus()
+    }
+    window.addEventListener('click', handleWorkspaceClick)
+    return () => window.removeEventListener('click', handleWorkspaceClick)
+  }, [isHoldModalOpen, isRecallModalOpen, selected, payment, completed, collisionOrder])
+
+  // Global Keyboard shortcuts & Hardware Barcode Scanner Wedge Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Direct Print shortcut (F5, F2, F9)
+      if (e.key === 'F5' || e.key === 'F2' || e.key === 'F9') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (completed) {
+          window.print()
+          return
+        }
+        if (cart.length > 0 && !isSubmitting && !isHoldModalOpen && !isRecallModalOpen && !selected) {
+          handleDirectPrintSale()
+        } else if (!cart.length && !completed) {
+          setNotice('⚠️ Cart is empty. Please add products before printing.')
+        }
+        return
+      }
+
+      // If any modal is open, do not intercept typing/scanning
+      if (isHoldModalOpen || isRecallModalOpen || selected || payment || completed || collisionOrder) {
+        return
+      }
+
+      // F4 to Hold Current Bill
+      if (e.key === 'F4') {
+        e.preventDefault()
+        if (cart.length) {
+          setIsHoldModalOpen(true)
+        }
+        return
+      }
+
+      // Alt+H to Hold or Recall
+      if (e.altKey && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault()
+        if (cart.length) {
+          setIsHoldModalOpen(true)
+        } else {
+          setIsRecallModalOpen(true)
+        }
+        return
+      }
+
+      // Check active element
+      const activeEl = document.activeElement as HTMLElement | null
+      const activeTag = activeEl?.tagName?.toLowerCase()
+      const isOtherInput = (activeTag === 'input' && activeEl !== scanInputRef.current) || activeTag === 'textarea'
+
+      // Allow normal typing inside catalog search inputs
+      if (isOtherInput) {
+        return
+      }
+
+      // Enter key: Barcode scanner finish or manual enter
+      if (e.key === 'Enter') {
+        const buffered = barcodeBufferRef.current.trim()
+        if (buffered.length >= 2) {
+          e.preventDefault()
+          e.stopPropagation()
+          barcodeBufferRef.current = ''
+          setScan('')
+          processBarcodeOrCode(buffered)
+          scanInputRef.current?.focus()
+          return
+        }
+        if (scan.trim()) {
+          e.preventDefault()
+          e.stopPropagation()
+          const code = scan.trim()
+          setScan('')
+          barcodeBufferRef.current = ''
+          processBarcodeOrCode(code)
+          scanInputRef.current?.focus()
+          return
+        }
+        return
+      }
+
+      // Printable single character (scanner keystroke or user typing)
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const now = Date.now()
+        const elapsed = now - lastKeyTimeRef.current
+        lastKeyTimeRef.current = now
+
+        // Hardware scanners output characters typically in < 50ms intervals
+        if (elapsed > 200) {
+          barcodeBufferRef.current = e.key
+        } else {
+          barcodeBufferRef.current += e.key
+        }
+
+        // Even if the search bar was not clicked/focused, focus it and capture the character
+        if (document.activeElement !== scanInputRef.current) {
+          scanInputRef.current?.focus()
+          setScan(prev => {
+            const nextVal = prev + e.key
+            // Immediate check for exact barcode match
+            const trimmed = nextVal.trim()
+            const match = groceryItems.find(
+              item => item.active && item.barcode && item.barcode.trim().toLowerCase() === trimmed.toLowerCase()
+            )
+            if (match) {
+              setTimeout(() => {
+                addGrocery(match)
+                setScan('')
+                barcodeBufferRef.current = ''
+                setNotice('')
+              }, 10)
+            }
+            return nextVal
+          })
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    cart,
+    completed,
+    isSubmitting,
+    isHoldModalOpen,
+    isRecallModalOpen,
+    selected,
+    payment,
+    collisionOrder,
+    total,
+    scan,
+    groceryItems,
+    chickenItems,
+  ])
+
   const handleHoldBill = (note: string) => {
     if (!cart.length) return
     const nextNum = heldOrdersStore.getNextHoldNumber()
@@ -1094,13 +1251,22 @@ export function PosPayment({
           <form className="pos-search-bar" onSubmit={submitScan}>
             <span className="search-icon">🔍</span>
             <input
+              ref={scanInputRef}
               value={scan}
               onChange={event => handleScanChange(event.target.value)}
-              placeholder="Enter Code (Chicken 1+, Grocery 100+) or scan barcode..."
+              placeholder="Scan barcode or enter code (Chicken 1+, Grocery 100+)..."
               autoFocus
             />
             {scan && (
-              <button type="button" className="btn-clear-search" onClick={() => setScan('')}>
+              <button
+                type="button"
+                className="btn-clear-search"
+                onClick={() => {
+                  setScan('')
+                  barcodeBufferRef.current = ''
+                  scanInputRef.current?.focus()
+                }}
+              >
                 ×
               </button>
             )}
@@ -1216,22 +1382,35 @@ export function PosPayment({
               <button
                 type="button"
                 className="pos-btn-hold-action"
-                disabled={!cart.length}
+                disabled={!cart.length || isSubmitting}
                 onClick={() => setIsHoldModalOpen(true)}
                 title="Hold Current Bill (F4)"
               >
-                <span>⏸️ Hold Bill</span>
+                <span>⏸️ Hold (F4)</span>
               </button>
 
               <button
                 type="button"
-                className="pos-btn-pay"
-                disabled={!cart.length}
-                onClick={() => setPayment(true)}
+                className="pos-btn-pay pos-btn-direct-print"
+                disabled={!cart.length || isSubmitting}
+                onClick={handleDirectPrintSale}
+                title="Direct Print & Complete Bill (Shortcut: F5)"
               >
-                <span className="pay-icon">💳</span>
-                <span className="pay-text">PAY NOW</span>
+                <span className="pay-icon">🖨️</span>
+                <span className="pay-text">
+                  {isSubmitting ? 'PRINTING...' : 'DIRECT PRINT (F5)'}
+                </span>
                 <b className="pay-amount">{formatMoney(total)}</b>
+              </button>
+
+              <button
+                type="button"
+                className="pos-btn-other-method"
+                disabled={!cart.length || isSubmitting}
+                onClick={() => setPayment(true)}
+                title="Card / Other Payment Methods"
+              >
+                💳 Other
               </button>
             </div>
           </div>
@@ -1545,7 +1724,20 @@ export function PosPayment({
       )}
 
       {/* SALE SUCCESS / RECEIPT PREVIEW */}
-      {completed && <SaleSuccess sale={completed} onNewSale={reset} onClose={() => setCompleted(null)} />}
+      {completed && (
+        <SaleSuccess
+          sale={completed}
+          onNewSale={() => {
+            reset()
+            setAutoPrintAfterSale(false)
+          }}
+          onClose={() => {
+            setCompleted(null)
+            setAutoPrintAfterSale(false)
+          }}
+          autoPrint={autoPrintAfterSale}
+        />
+      )}
     </section>
   )
 }

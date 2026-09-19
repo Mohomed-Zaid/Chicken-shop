@@ -1,9 +1,29 @@
 import type { Page } from '../App'
 import type { UserProfile } from '../services/authService'
 import { ConnectionIndicator, InstallAppButton } from './PwaManager'
-
 export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: { active: Page; onNavigate: (page: Page) => void; profile: UserProfile | null; onLogout: () => Promise<void>; isAdmin: boolean }) {
-  const pages: [Page, string][] = isAdmin ? [['Dashboard', '▦'], ['POS', '⊞'], ['Inventory', '▥'], ['Products', '◫'], ['Purchases', '⇩'], ['Suppliers', '♙'], ['Daily Chicken Prices', '◉'], ['Expenses', '◒'], ['Reports', '▤'], ['Users', '♙'], ['Settings', '⚙']] : [['Dashboard', '▦'], ['POS', '⊞'], ['Customers', '♙'], ['Reports', '▤']]
+  const pages: [Page, string][] = isAdmin
+    ? [
+        ['Dashboard', '▦'],
+        ['POS', '⊞'],
+        ['Sales', '🧾'],
+        ['Inventory', '▥'],
+        ['Products', '◫'],
+        ['Purchases', '⇩'],
+        ['Suppliers', '♙'],
+        ['Daily Chicken Prices', '◉'],
+        ['Expenses', '◒'],
+        ['Reports', '▤'],
+        ['Users', '♙'],
+        ['Settings', '⚙'],
+      ]
+    : [
+        ['Dashboard', '▦'],
+        ['POS', '⊞'],
+        ['Sales', '🧾'],
+        ['Customers', '♙'],
+        ['Reports', '▤'],
+      ]
   return (
     <aside className="sidebar">
       <div className="brand">

@@ -87,7 +87,12 @@ export async function getUserProfile(user?: User | null): Promise<UserProfile | 
   try {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', u.id)
     if (!error && data && data.length > 0) {
-      return data[0] as UserProfile
+      const existing = data[0] as UserProfile
+      if (isAdminEmail && existing.role !== 'admin') {
+        existing.role = 'admin'
+        Promise.resolve(supabase.from('profiles').update({ role: 'admin', updated_at: new Date().toISOString() }).eq('id', u.id)).catch(() => {})
+      }
+      return existing
     }
 
     // Auto-create or synthesize profile if not present in the profiles table

@@ -1286,7 +1286,7 @@ button {
   margin-bottom: 14px;
 }
 
-.purchase-field-group > label {
+.purchase-field-group>label {
   display: block;
   font-size: 11px;
   font-weight: 800;
@@ -2603,6 +2603,7 @@ button {
     opacity: 0;
     transform: translateX(-50%) translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -3834,6 +3835,437 @@ button {
   font-size: 13px;
 }
 
+/* ==========================================================================
+   SALES HISTORY & RECORDS PAGE STYLES
+   ========================================================================== */
+.sales-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sales-filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sales-search-wrap {
+  flex: 1;
+  min-width: 260px;
+}
+
+.sales-date-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sales-date-tabs .filter-tab {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sales-date-tabs .filter-tab:hover {
+  background: #283648;
+  color: #f1f5f9;
+}
+
+.sales-date-tabs .filter-tab.active {
+  background: #e8aa15;
+  color: #0f172a;
+  border-color: #e8aa15;
+  font-weight: 800;
+}
+
+.sales-select-filter {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sales-custom-date-row {
+  display: flex;
+  gap: 16px;
+  background: #17232d;
+  border: 1px solid #283745;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.sales-custom-date-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.sales-custom-date-row input[type="date"] {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.sales-table-container {
+  overflow-x: auto;
+}
+
+.sales-row {
+  display: grid;
+  grid-template-columns: 160px 150px 1fr 110px 120px 130px 160px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #223241;
+  font-size: 12px;
+}
+
+.sales-row.table-head {
+  background: #15222d;
+  color: #94a3b8;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.sales-col-invoice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invoice-number-text {
+  font-family: monospace;
+  font-size: 13px;
+  color: #38bdf8;
+  font-weight: 800;
+}
+
+.sale-date-time {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.sales-col-customer {
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sales-col-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.items-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: #1e293b;
+  color: #cbd5e1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.items-preview-text {
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sales-col-cashier {
+  color: #94a3b8;
+}
+
+.sales-col-payment {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-pill {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+  align-self: flex-start;
+  text-transform: uppercase;
+}
+
+.badge-cash {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-card {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.badge-credit {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-other {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.sales-col-total {
+  text-align: right;
+}
+
+.sale-total-amount {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #10b981;
+  font-variant-numeric: tabular-nums;
+}
+
+.sales-col-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-action-receipt {
+  background: #243647;
+  color: #e2e8f0;
+  border: 1px solid #3b4e61;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-action-receipt:hover {
+  background: #2f4559;
+  color: #ffffff;
+}
+
+.btn-action-inspect {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-action-inspect:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.empty-sales-notice {
+  text-align: center;
+  padding: 48px 16px;
+  color: #64748b;
+}
+
+.empty-sales-notice strong {
+  font-size: 16px;
+  color: #94a3b8;
+  display: block;
+}
+
+.empty-sales-notice p {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+/* Inspect Sale Modal Dialog */
+.sales-inspect-dialog {
+  background: #17232d;
+  border: 1px solid #364858;
+  border-radius: 10px;
+  width: min(520px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.sales-inspect-dialog .dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: #131d25;
+  border-bottom: 1px solid #283745;
+}
+
+.sales-inspect-dialog .dialog-header h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #f1f5f9;
+}
+
+.sales-inspect-dialog .dialog-header small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.inspect-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #15222c;
+  border-bottom: 1px solid #223241;
+}
+
+.inspect-meta-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspect-meta-grid small {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.inspect-meta-grid strong {
+  font-size: 12.5px;
+  color: #e2e8f0;
+}
+
+.inspect-items-table {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 18px;
+}
+
+.inspect-items-head {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr 1fr;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  border-bottom: 1px solid #223241;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.inspect-item-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr 1fr;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1a2935;
+  font-size: 11.5px;
+}
+
+.inspect-item-row span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.inspect-item-row span:first-child b {
+  color: #f1f5f9;
+}
+
+.inspect-item-row span:first-child small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.inspect-totals-box {
+  padding: 14px 18px;
+  background: #131d25;
+  border-top: 1px solid #223241;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.totals-row {
+  display: flex;
+  justify-content: space-between;
+  color: #cbd5e1;
+}
+
+.totals-row.discount {
+  color: #f87171;
+}
+
+.totals-row.grand-total {
+  border-top: 1px solid #334155;
+  padding-top: 6px;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #10b981;
+}
+
+.cash-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  background: #0f172a;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.cash-breakdown-row b {
+  color: #f1f5f9;
+}
+
+.inspect-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  background: #17232d;
+  border-top: 1px solid #283745;
+}
+
 /* Dashboard Live Date & Time Card */
 .dashboard-live-clock-card {
   display: flex;
@@ -4547,15 +4979,47 @@ button {
   font-size: 15px;
   cursor: pointer;
   transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(232, 170, 21, 0.25);
 }
 
 .pos-btn-pay:hover:not(:disabled) {
   background: #fbbd24;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(232, 170, 21, 0.4);
 }
 
 .pos-btn-pay:disabled {
   opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.pos-btn-other-method {
+  height: 52px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #3c4f62;
+  background: #1c2b3a;
+  color: #9bb1c4;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pos-btn-other-method:hover:not(:disabled) {
+  background: #25394d;
+  color: #ffffff;
+  border-color: #63b3ed;
+}
+
+.pos-btn-other-method:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -5154,7 +5618,7 @@ button {
   justify-content: space-between;
   font-weight: 800;
   font-size: 10px;
-  border-bottom: 1px dashed #000000;
+  border: none;
   padding-bottom: 3px;
   margin-bottom: 5px;
 }
@@ -5240,10 +5704,9 @@ button {
 }
 
 .thermal-grand-total {
-  border-top: 2px solid #000000;
-  border-bottom: 2px solid #000000;
-  padding: 5px 0;
-  margin: 5px 0 4px;
+  border: none;
+  padding: 6px 0;
+  margin: 6px 0 4px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -5407,6 +5870,11 @@ button {
   }
 }
 
+/* Screen: hide dedicated print-only elements */
+.thermal-print-only {
+  display: none !important;
+}
+
 /* ==========================================================================
    AUTHORITATIVE THERMAL RECEIPT PRINT STYLESHEET (80MM XPRINTER OPTIMIZED)
    ========================================================================== */
@@ -5416,11 +5884,12 @@ button {
 }
 
 @media print {
-  /* 1. HIDE ALL SCREEN UI, NAVIGATION, BUTTONS, BANNERS AND CHROME */
+
+  /* 1. HIDE ALL SCREEN UI, NAVIGATION, BUTTONS, BANNERS, MODALS AND CHROME */
   .sidebar,
   .brand,
   .nav,
-  .pos-workspace > :not(.shade),
+  .pos-workspace> :not(.thermal-print-only),
   .pos-live-header,
   .pos-top-header,
   .pos-main-container,
@@ -5435,9 +5904,10 @@ button {
   .catalog,
   .dashboard-page,
   .settings-page,
-  .prices-page:not(.reports-page):not(:has(.shade)):not(:has(.receipt)):not(:has(.receipt-modal-shade)),
-  .prices-page:not(.reports-page) > :not(.shade):not(.receipt-modal-shade):not(.report-print-area),
-  .purchases-page > :not(.shade):not(.receipt-modal-shade),
+  .prices-page:not(.reports-page):not(:has(.thermal-print-only)):not(:has(.receipt)),
+  .prices-page:not(.reports-page)> :not(.thermal-print-only):not(.report-print-area),
+  .purchases-page> :not(.shade):not(.receipt-modal-shade),
+  .sales-page> :not(.thermal-print-only),
   .subscription-warning-banner,
   .subscription-banner,
   .pwa-update-banner,
@@ -5447,8 +5917,14 @@ button {
   .pos-connection-badge,
   .pwa-installed-badge,
   .sidebar-install-btn,
-  .app-container > :not(.app),
+  .app-container> :not(.app),
   .no-print,
+  .shade,
+  .receipt-modal-shade,
+  .receipt-modal-card,
+  .receipt-preview,
+  .receipt-preview-scroll,
+  .receipt-paper-roll,
   .receipt-success-banner,
   .receipt-modal-actions,
   .thermal-80mm-badge,
@@ -5460,8 +5936,13 @@ button {
     display: none !important;
     visibility: hidden !important;
     height: 0 !important;
+    width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    overflow: hidden !important;
   }
 
   /* 2. BASE DOCUMENT PRINT RESET FOR CONTINUOUS ROLL */
@@ -5484,7 +5965,9 @@ button {
   .app-container,
   .app,
   .pos-workspace,
-  .pos {
+  .pos,
+  .sales-page,
+  .prices-page {
     display: block !important;
     background: transparent !important;
     border: none !important;
@@ -5497,33 +5980,31 @@ button {
   }
 
   /* 3. THERMAL RECEIPT PRINT SPECIFICATIONS (72MM ACTIVE PRINTABLE WIDTH) */
-  .receipt-modal-shade,
-  .shade:has(.receipt),
-  .shade:has(.thermal-80mm),
-  .shade:has(.sinhala-receipt) {
-    position: static !important;
-    inset: auto !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
+  .thermal-print-only {
     display: block !important;
-    box-shadow: none !important;
-    border: none !important;
+    visibility: visible !important;
+    position: static !important;
     width: 72mm !important;
     max-width: 72mm !important;
-    height: auto !important;
-    min-height: 0 !important;
-  }
-
-  .receipt-modal-card,
-  .receipt-preview,
-  .receipt-preview-scroll,
-  .receipt-paper-roll,
-  .receipt-80mm-container {
-    position: static !important;
-    background: transparent !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
+    outline: none !important;
+    overflow: visible !important;
+  }
+
+  .receipt-80mm-container {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
     width: 72mm !important;
     max-width: 72mm !important;
     margin: 0 auto !important;
@@ -5540,12 +6021,17 @@ button {
     width: 72mm !important;
     max-width: 72mm !important;
     margin: 0 auto !important;
-    padding: 1.5mm 1mm !important;
+    padding: 1mm 0.5mm !important;
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
     font-size: 11px !important;
     line-height: 1.35 !important;
     box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    outline: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
@@ -5557,6 +6043,59 @@ button {
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Force horizontal flex layout during browser printing */
+  .thermal-meta-row,
+  .thermal-items-header,
+  .thermal-item-row .item-sub-line,
+  .thermal-summary-row,
+  .thermal-grand-total {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    width: 100% !important;
+  }
+
+  .thermal-grand-total {
+    align-items: center !important;
+    border: none !important;
+    padding: 4px 0 !important;
+    margin: 5px 0 4px !important;
+  }
+
+  .thermal-items-header .col-desc {
+    flex: 1 1 auto !important;
+    text-align: left !important;
+  }
+
+  .thermal-items-header .col-calc {
+    text-align: left !important;
+    font-size: 9.5px !important;
+  }
+
+  .thermal-items-header .col-total {
+    text-align: right !important;
+    min-width: 65px !important;
+  }
+
+  .thermal-item-row .item-sub-line {
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+
+  .thermal-item-row .item-rate {
+    font-family: monospace, sans-serif !important;
+    font-size: 10px !important;
+    color: #222222 !important;
+  }
+
+  .thermal-item-row .item-total {
+    font-weight: 800 !important;
+    font-size: 11px !important;
+    text-align: right !important;
   }
 
   .thermal-header b,
@@ -5571,17 +6110,9 @@ button {
 
   .thermal-divider-dashed {
     border: none !important;
-    border-top: 1px dashed #000000 !important;
-    margin: 4px 0 !important;
+    display: none !important;
+    margin: 0 !important;
     height: 0 !important;
-    display: block !important;
-  }
-
-  .thermal-grand-total {
-    border-top: 2px solid #000000 !important;
-    border-bottom: 2px solid #000000 !important;
-    padding: 4px 0 !important;
-    margin: 5px 0 4px !important;
   }
 
   .thermal-logo,
@@ -6427,4 +6958,3 @@ button {
   color: #101820 !important;
   font-weight: 900 !important;
 }
-

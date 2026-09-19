@@ -21,16 +21,17 @@ import { useSubscription } from './context/SubscriptionContext'
 import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
 import { groceryStore, ensureGroceryCodes, type GroceryProduct } from './data/grocery'
 import { storageAdapter } from './services/storageAdapter'
+import { Sales } from './components/Sales'
 import { getProducts, saveProducts } from './services/supabase/productService'
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
 import { fetchSalesFromSupabase } from './services/supabase/salesService'
 import './index.css'
 
-export type Page = 'Dashboard' | 'POS' | 'Inventory' | 'Products' | 'Customers' | 'Daily Chicken Prices' | 'Expenses' | 'Reports' | 'Suppliers' | 'Purchases' | 'Settings' | 'Users'
+export type Page = 'Dashboard' | 'POS' | 'Sales' | 'Inventory' | 'Products' | 'Customers' | 'Daily Chicken Prices' | 'Expenses' | 'Reports' | 'Suppliers' | 'Purchases' | 'Settings' | 'Users'
 
 const adminPages: Page[] = ['Inventory', 'Products', 'Daily Chicken Prices', 'Expenses', 'Suppliers', 'Purchases', 'Settings', 'Users']
 
-const text: Record<Exclude<Page, 'POS' | 'Daily Chicken Prices' | 'Inventory' | 'Settings'>, string> = {
+const text: Record<Exclude<Page, 'POS' | 'Daily Chicken Prices' | 'Inventory' | 'Settings' | 'Sales'>, string> = {
   Dashboard: 'A quick view of today’s sales and shop activity will appear here.',
   Products: 'Manage chicken cuts, grocery products, units, pricing and barcodes.',
   Customers: 'Search customers and manage permitted customer information.',
@@ -233,6 +234,8 @@ export default function App() {
           <AccessDenied />
         ) : page === 'POS' ? (
           <PosPayment chickenItems={items} groceryItems={grocery} onStockChange={saveGrocery} />
+        ) : page === 'Sales' ? (
+          <Sales />
         ) : page === 'Inventory' ? (
           <Inventory items={grocery} onChange={saveGrocery} userName={profile?.full_name || 'Administrator'} />
         ) : page === 'Dashboard' ? (
@@ -254,7 +257,7 @@ export default function App() {
         ) : page === 'Settings' ? (
           <Settings />
         ) : (
-          <PlaceholderPage title={page} description={text[page as Exclude<Page, 'POS' | 'Daily Chicken Prices' | 'Inventory' | 'Settings'>]} />
+          <PlaceholderPage title={page} description={text[page as Exclude<Page, 'POS' | 'Daily Chicken Prices' | 'Inventory' | 'Settings' | 'Sales'>]} />
         )}
       </main>
     </div>
