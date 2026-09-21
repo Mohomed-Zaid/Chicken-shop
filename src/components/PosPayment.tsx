@@ -244,6 +244,49 @@ function PaymentModal({
     onComplete(method, total, selectedCustomer)
   }
 
+  // Keyboard shortcuts inside Payment Modal (Escape to cancel, O or Alt+O for Other, C for Cash, etc.)
+  useEffect(() => {
+    const handleModalKey = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase()
+      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select'
+
+      if (e.key === 'Escape' && !processing) {
+        e.preventDefault()
+        onCancel()
+        return
+      }
+
+      if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault()
+        setMethod('Other')
+        setError('')
+        return
+      }
+
+      if (!isInput && !processing) {
+        if (e.key === 'o' || e.key === 'O' || e.key === '4') {
+          e.preventDefault()
+          setMethod('Other')
+          setError('')
+        } else if (e.key === 'c' || e.key === 'C' || e.key === '1') {
+          e.preventDefault()
+          setMethod('Cash')
+          setError('')
+        } else if (e.key === 'd' || e.key === 'D' || e.key === '2') {
+          e.preventDefault()
+          setMethod('Card')
+          setError('')
+        } else if (e.key === 'r' || e.key === 'R' || e.key === '3') {
+          e.preventDefault()
+          setMethod('Credit')
+          setError('')
+        }
+      }
+    }
+    window.addEventListener('keydown', handleModalKey)
+    return () => window.removeEventListener('keydown', handleModalKey)
+  }, [processing, onCancel])
+
   return (
     <div className="shade">
       <form className="dialog pos-payment-modal" onSubmit={submit} style={{ maxWidth: '500px' }}>
@@ -1743,6 +1786,18 @@ export function PosPayment({
         return
       }
 
+      // Shortcut to open Other Payment Methods (F8, F6, Alt+O)
+      if (e.key === 'F8' || e.key === 'F6' || (e.altKey && (e.key === 'o' || e.key === 'O'))) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (cart.length > 0 && !isSubmitting) {
+          setPayment(true)
+        } else if (!cart.length) {
+          setNotice('⚠️ Cart is empty. Please add products before payment.')
+        }
+        return
+      }
+
       // Alt+H to Hold or Recall
       if (e.altKey && (e.key === 'h' || e.key === 'H')) {
         e.preventDefault()
@@ -2301,9 +2356,9 @@ export function PosPayment({
                 className="pos-btn-other-method"
                 disabled={!cart.length || isSubmitting}
                 onClick={() => setPayment(true)}
-                title="Card / Other Payment Methods"
+                title="Card / Other Payment Methods (Shortcut: F8 / Alt+O)"
               >
-                💳 Other
+                💳 Other (F8)
               </button>
             </div>
           </div>
