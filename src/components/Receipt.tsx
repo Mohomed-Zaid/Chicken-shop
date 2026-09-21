@@ -243,7 +243,10 @@ export function Receipt({ sale }: { sale: Sale }) {
               const calcText =
                 item.productType === 'chicken'
                   ? `${weightLabel(item.weightGrams || 0)} × ${formatMoney(item.pricePerKg || 0)}`
-                  : `${item.quantity} × ${formatMoney(item.unitPrice)}`
+                  : `${item.paidQuantity ?? item.quantity} × ${formatMoney(item.unitPrice)}`
+
+              const hasFree = Boolean(item.freeQuantity && item.freeQuantity > 0)
+              const totalPhysical = item.totalQuantity ?? ((item.paidQuantity ?? item.quantity) + (item.freeQuantity || 0))
 
               return (
                 <div className="thermal-item-row" key={`${item.productId}-${index}`}>
@@ -252,6 +255,12 @@ export function Receipt({ sale }: { sale: Sale }) {
                     <span className="item-rate">{calcText}</span>
                     <span className="item-total">{formatMoney(item.total)}</span>
                   </div>
+                  {hasFree && (
+                    <div className="item-promo-sub-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, marginTop: '2px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '2px' }}>
+                      <span>+ {item.freeQuantity} නොමිලේ (FREE)</span>
+                      <span>මුළු ප්‍රමාණය (Total Qty): {totalPhysical}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}

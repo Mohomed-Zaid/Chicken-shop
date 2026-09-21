@@ -1,7 +1,25 @@
 export type PaymentMethod = 'Cash' | 'Card' | 'Credit' | 'Other'
 export type SaleStatus = 'completed' | 'cancelled'
-export interface SaleItem { code?: string | null; productId: string; productName: string; productType: 'chicken' | 'grocery'; quantity: number; weightGrams: number | null; unitPrice: number; pricePerKg: number | null; costPrice: number | null; total: number }
-export interface SaleTransaction { id: string; invoiceNumber: string; date: string; time: string; items: SaleItem[]; subtotal: number; discount: number; tax: number; service: number; total: number; paymentMethod: PaymentMethod; amountReceived: number; change: number; cashier: string; customerName: string; status: SaleStatus }
+export interface SaleItem {
+  code?: string | null;
+  productId: string;
+  productName: string;
+  productType: 'chicken' | 'grocery';
+  quantity: number; // Customer paid quantity
+  weightGrams: number | null;
+  unitPrice: number;
+  pricePerKg: number | null;
+  costPrice: number | null;
+  total: number;
+  paidQuantity?: number;
+  freeQuantity?: number;
+  totalQuantity?: number;
+  promotionApplied?: boolean;
+  promotionType?: string | null;
+  promotionBuyQuantity?: number | null;
+  promotionFreeQuantity?: number | null;
+}
+export interface SaleTransaction { id: string; invoiceNumber: string; date: string; time: string; items: SaleItem[]; subtotal: number; discount: number; tax: number; service: number; total: number; paymentMethod: PaymentMethod; amountReceived: number; change: number; cashier: string; customerId?: string; customerName: string; status: SaleStatus }
 export type Sale = SaleTransaction
 const sk = 'sales-transactions', ik = 'sales-invoice-sequence'
 const read = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) || '') as T } catch { return d } }

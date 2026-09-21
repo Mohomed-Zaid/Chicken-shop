@@ -22,9 +22,12 @@ import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/c
 import { groceryStore, ensureGroceryCodes, type GroceryProduct } from './data/grocery'
 import { storageAdapter } from './services/storageAdapter'
 import { Sales } from './components/Sales'
+import { Customers } from './components/Customers'
 import { getProducts, saveProducts, deleteProduct } from './services/supabase/productService'
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
 import { fetchSalesFromSupabase } from './services/supabase/salesService'
+import { fetchCustomersFromSupabase, fetchCustomerPaymentsFromSupabase } from './services/supabase/customerService'
+import { customerStore, customerPaymentStore } from './data/customers'
 import './index.css'
 
 export type Page = 'Dashboard' | 'POS' | 'Sales' | 'Inventory' | 'Products' | 'Customers' | 'Daily Chicken Prices' | 'Expenses' | 'Reports' | 'Suppliers' | 'Purchases' | 'Settings' | 'Users'
@@ -56,11 +59,33 @@ export default function App() {
 
     const initData = async () => {
       try {
-        const [cloudProducts, cloudCuts, cloudSales] = await Promise.all([
+        const [cloudProducts, cloudCuts, cloudSales, cloudCustomers, cloudPayments] = await Promise.all([
           getProducts().catch(() => [] as GroceryProduct[]),
           getChickenCuts().catch(() => [] as ChickenItem[]),
           fetchSalesFromSupabase().catch(() => [] as any[]),
+          fetchCustomersFromSupabase().catch(() => [] as any[]),
+          fetchCustomerPaymentsFromSupabase().catch(() => [] as any[]),
         ])
+
+        if (cloudCustomers && cloudCustomers.length > 0) {
+          const localCusts = customerStore.getCustomers()
+          const map = new Map<string, any>()
+          cloudCustomers.forEach(c => map.set(c.id, c))
+          localCusts.forEach(c => {
+            if (c && c.id && !map.has(c.id)) map.set(c.id, c)
+          })
+          customerStore.setCustomers(Array.from(map.values()))
+        }
+
+        if (cloudPayments && cloudPayments.length > 0) {
+          const localPays = customerPaymentStore.getCustomerPayments()
+          const map = new Map<string, any>()
+          cloudPayments.forEach(p => map.set(p.id, p))
+          localPays.forEach(p => {
+            if (p && p.id && !map.has(p.id)) map.set(p.id, p)
+          })
+          customerPaymentStore.setCustomerPayments(Array.from(map.values()))
+        }
 
         if (cloudSales && cloudSales.length > 0) {
           const rawLocal = localStorage.getItem('sales-transactions')
@@ -256,6 +281,8 @@ export default function App() {
           <Expenses refresh={() => handleNavigate('Expenses')} />
         ) : page === 'Reports' ? (
           <Reports isAdmin={isAdmin} />
+        ) : page === 'Customers' ? (
+          <Customers />
         ) : page === 'Suppliers' ? (
           <Suppliers />
         ) : page === 'Purchases' ? (

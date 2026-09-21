@@ -14,6 +14,13 @@ export type ProductRow = {
   low_stock_level: number
   unit: string | null
   active: boolean
+  promotion_enabled?: boolean | null
+  promotion_type?: string | null
+  promotion_buy_quantity?: number | null
+  promotion_free_quantity?: number | null
+  promotion_start_date?: string | null
+  promotion_end_date?: string | null
+  promotion_active?: boolean | null
   created_at?: string
   updated_at?: string
 }
@@ -31,6 +38,13 @@ export const rowToProduct = (row: ProductRow): GroceryProduct => ({
   lowStockLevel: Number(row.low_stock_level || 0),
   unit: row.unit || 'Piece',
   active: row.active ?? true,
+  promotionEnabled: Boolean(row.promotion_enabled),
+  promotionType: row.promotion_type || 'BUY_X_GET_Y_FREE',
+  promotionBuyQuantity: row.promotion_buy_quantity != null ? Number(row.promotion_buy_quantity) : 2,
+  promotionFreeQuantity: row.promotion_free_quantity != null ? Number(row.promotion_free_quantity) : 1,
+  promotionStartDate: row.promotion_start_date || null,
+  promotionEndDate: row.promotion_end_date || null,
+  promotionActive: row.promotion_active ?? true,
   createdAt: row.created_at || new Date().toISOString(),
   updatedAt: row.updated_at || new Date().toISOString(),
 })
@@ -47,6 +61,13 @@ export const productToRow = (product: GroceryProduct): ProductRow => {
     low_stock_level: product.lowStockLevel,
     unit: product.unit || null,
     active: product.active,
+    promotion_enabled: Boolean(product.promotionEnabled),
+    promotion_type: product.promotionType || 'BUY_X_GET_Y_FREE',
+    promotion_buy_quantity: product.promotionBuyQuantity != null ? Number(product.promotionBuyQuantity) : 2,
+    promotion_free_quantity: product.promotionFreeQuantity != null ? Number(product.promotionFreeQuantity) : 1,
+    promotion_start_date: product.promotionStartDate || null,
+    promotion_end_date: product.promotionEndDate || null,
+    promotion_active: product.promotionActive ?? true,
     created_at: product.createdAt || undefined,
     updated_at: product.updatedAt || undefined,
   }

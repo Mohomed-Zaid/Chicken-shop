@@ -118,10 +118,22 @@ export function DailyChickenPrices({
   onAdd: (code: string, name: string, price: number) => void
   onToggle: (id: string) => void
 }) {
+  const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<ChickenItem | undefined>()
   const [adding, setAdding] = useState(false)
   const active = items.filter(item => item.active).length
   const updated = useMemo(() => history[0]?.changedAt, [history])
+
+  const filteredItems = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return items
+    return items.filter(item => {
+      const code = (item.code || '').toLowerCase()
+      const name = (item.name || '').toLowerCase()
+      const cut = (item.cut || '').toLowerCase()
+      return code.includes(q) || name.includes(q) || cut.includes(q)
+    })
+  }, [items, query])
 
   return (
     <section className="prices-page">
@@ -154,6 +166,37 @@ export function DailyChickenPrices({
         </button>
       </section>
 
+      {/* SEARCH BAR */}
+      <div style={{ position: 'relative', margin: '14px 0' }}>
+        <input
+          className="product-search"
+          placeholder="Search chicken cuts by code (e.g. 001, CH001) or cut name..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: '#8da2b5',
+              cursor: 'pointer',
+              fontSize: '18px',
+              lineHeight: 1,
+            }}
+            title="Clear search"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       <section className="price-table">
         <div className="price-row table-head">
           <span>Code</span>
@@ -162,33 +205,52 @@ export function DailyChickenPrices({
           <span>Status</span>
           <span>Action</span>
         </div>
-        {items.map(item => (
-          <div className="price-row" key={item.id}>
-            <span>
-              <b className="font-mono">{item.code || '—'}</b>
-            </span>
-            <span>
-              <b>{item.name}</b>
-              <small>{item.cut || item.name} cut</small>
-            </span>
-            <span>
-              <b>{formatMoney(item.pricePerKg)}</b>
-            </span>
-            <span>
+        {filteredItems.length === 0 ? (
+          <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>
+            <b>No chicken cuts found</b>
+            <p style={{ fontSize: '13px', marginTop: '6px' }}>
+              {query ? `No chicken cuts match "${query}".` : 'No chicken items available.'}
+            </p>
+            {query && (
               <button
-                className={item.active ? 'status active' : 'status'}
-                onClick={() => onToggle(item.id)}
+                type="button"
+                className="edit"
+                style={{ marginTop: '8px' }}
+                onClick={() => setQuery('')}
               >
-                {item.active ? 'Active' : 'Inactive'}
+                Clear Search
               </button>
-            </span>
-            <span>
-              <button className="edit" onClick={() => setEditing(item)}>
-                Edit
-              </button>
-            </span>
+            )}
           </div>
-        ))}
+        ) : (
+          filteredItems.map(item => (
+            <div className="price-row" key={item.id}>
+              <span>
+                <b className="font-mono">{item.code || '—'}</b>
+              </span>
+              <span>
+                <b>{item.name}</b>
+                <small>{item.cut || item.name} cut</small>
+              </span>
+              <span>
+                <b>{formatMoney(item.pricePerKg)}</b>
+              </span>
+              <span>
+                <button
+                  className={item.active ? 'status active' : 'status'}
+                  onClick={() => onToggle(item.id)}
+                >
+                  {item.active ? 'Active' : 'Inactive'}
+                </button>
+              </span>
+              <span>
+                <button className="edit" onClick={() => setEditing(item)}>
+                  Edit
+                </button>
+              </span>
+            </div>
+          ))
+        )}
       </section>
 
       <section className="history">

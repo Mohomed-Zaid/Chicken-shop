@@ -3,6 +3,7 @@ import { categories, getNextGroceryCode, type GroceryProduct } from '../data/gro
 import { formatMoney } from '../data/chicken'
 import { storageAdapter } from '../services/storageAdapter'
 import { saveProducts } from '../services/supabase/productService'
+import { isPromotionActive, getPromotionStatus } from '../services/promotionService'
 
 export function Products({
   items,
@@ -78,6 +79,13 @@ export function Products({
                 lowStockLevel: 0,
                 unit: 'Piece',
                 active: true,
+                promotionEnabled: false,
+                promotionType: 'BUY_X_GET_Y_FREE',
+                promotionBuyQuantity: 2,
+                promotionFreeQuantity: 1,
+                promotionStartDate: null,
+                promotionEndDate: null,
+                promotionActive: true,
                 createdAt: '',
                 updatedAt: '',
               })
@@ -114,6 +122,19 @@ export function Products({
             <span>
               <b>{item.name}</b>
               <small>{item.barcode ? `Barcode: ${item.barcode}` : 'No barcode'} · {item.category}</small>
+              {item.promotionEnabled && (
+                <div style={{ marginTop: '4px' }}>
+                  {isPromotionActive(item) ? (
+                    <span className="product-promo-badge active">
+                      🎁 BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
+                    </span>
+                  ) : (
+                    <span className="product-promo-badge inactive">
+                      ⏸️ {getPromotionStatus(item).toUpperCase()}: BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
+                    </span>
+                  )}
+                </div>
+              )}
             </span>
             <span>
               {item.discountPrice && item.discountPrice > 0 && item.discountPrice < item.sellingPrice ? (
@@ -287,6 +308,20 @@ function Editor({
       return setError('Discount price must be less than the regular selling price.')
     }
 
+    if (product.promotionEnabled) {
+      const buyQty = Number(product.promotionBuyQuantity || 0)
+      const freeQty = Number(product.promotionFreeQuantity || 0)
+      if (buyQty < 1) {
+        return setError('Promotion Buy quantity must be at least 1.')
+      }
+      if (freeQty < 1) {
+        return setError('Promotion Free quantity must be at least 1.')
+      }
+      if (product.promotionStartDate && product.promotionEndDate && product.promotionStartDate > product.promotionEndDate) {
+        return setError('Promotion End Date cannot be earlier than Start Date.')
+      }
+    }
+
     save(
       {
         code: codeVal,
@@ -300,6 +335,13 @@ function Editor({
         lowStockLevel: Number(product.lowStockLevel),
         unit: product.unit,
         active: product.active,
+        promotionEnabled: Boolean(product.promotionEnabled),
+        promotionType: product.promotionType || 'BUY_X_GET_Y_FREE',
+        promotionBuyQuantity: product.promotionBuyQuantity ? Math.max(1, Math.floor(Number(product.promotionBuyQuantity))) : 2,
+        promotionFreeQuantity: product.promotionFreeQuantity ? Math.max(1, Math.floor(Number(product.promotionFreeQuantity))) : 1,
+        promotionStartDate: product.promotionStartDate ? product.promotionStartDate.trim() : null,
+        promotionEndDate: product.promotionEndDate ? product.promotionEndDate.trim() : null,
+        promotionActive: product.promotionActive ?? true,
       },
       product.id || undefined
     )
@@ -386,9 +428,124 @@ function Editor({
           {field('stockQuantity', 'STOCK QUANTITY', 'number')}
           {field('lowStockLevel', 'LOW STOCK LEVEL', 'number')}
           {field('unit', 'UNIT')}
-          {error && <p className="validation">{error}</p>}
+
+          {/* PROMOTION CONFIGURATION */}
+          <div className={`promo-config-card ${product.promotionEnabled ? 'enabled' : ''}`}>
+            <div className="promo-card-header">
+              <div className="promo-header-info">
+                <span className="promo-badge-tag">PROMOTIONAL OFFER</span>
+                <div className="promo-card-title">🎁 Buy X Get Y Free Promotion</div>
+                <p className="promo-card-desc">Configure promotional buy-and-get-free rules for POS billing</p>
+              </div>
+              <label className="promo-switch-label">
+                <input
+                  type="checkbox"
+                  checked={Boolean(product.promotionEnabled)}
+                  onChange={e =>
+                    setProduct({
+                      ...product,
+                      promotionEnabled: e.target.checked,
+                      promotionBuyQuantity: product.promotionBuyQuantity || 2,
+                      promotionFreeQuantity: product.promotionFreeQuantity || 1,
+                      promotionActive: e.target.checked ? (product.promotionActive ?? true) : product.promotionActive,
+                    })
+                  }
+                />
+                <span>Enable Promotion</span>
+              </label>
+            </div>
+
+            {product.promotionEnabled && (
+              <div className="promo-card-body">
+                <div className="promo-input-group">
+                  <label>
+                    PROMOTION TYPE
+                    <select
+                      value={product.promotionType || 'BUY_X_GET_Y_FREE'}
+                      onChange={e => setProduct({ ...product, promotionType: e.target.value })}
+                    >
+                      <option value="BUY_X_GET_Y_FREE">Buy X Get Y Free (e.g. Buy 2 Get 1 Free)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="promo-input-row">
+                  <label>
+                    BUY QUANTITY (X)
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={product.promotionBuyQuantity ?? 2}
+                      onChange={e => setProduct({ ...product, promotionBuyQuantity: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                      placeholder="e.g. 2"
+                      required={Boolean(product.promotionEnabled)}
+                    />
+                  </label>
+                  <label>
+                    GET FREE QUANTITY (Y)
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={product.promotionFreeQuantity ?? 1}
+                      onChange={e => setProduct({ ...product, promotionFreeQuantity: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                      placeholder="e.g. 1"
+                      required={Boolean(product.promotionEnabled)}
+                    />
+                  </label>
+                </div>
+
+                <div className="promo-input-row">
+                  <label>
+                    START DATE (OPTIONAL)
+                    <input
+                      type="date"
+                      value={product.promotionStartDate || ''}
+                      onChange={e => setProduct({ ...product, promotionStartDate: e.target.value || null })}
+                    />
+                  </label>
+                  <label>
+                    END DATE (OPTIONAL)
+                    <input
+                      type="date"
+                      value={product.promotionEndDate || ''}
+                      onChange={e => setProduct({ ...product, promotionEndDate: e.target.value || null })}
+                    />
+                  </label>
+                </div>
+
+                <div className="promo-status-row">
+                  <div className="status-label-group">
+                    <span className="status-title">Promotion Active</span>
+                    <span className="status-sub">Toggle whether this promotion should be immediately active in POS</span>
+                  </div>
+                  <label className="status-pill-toggle">
+                    <input
+                      type="checkbox"
+                      checked={product.promotionActive ?? true}
+                      onChange={e => setProduct({ ...product, promotionActive: e.target.checked })}
+                    />
+                    <span className={`status-pill ${product.promotionActive ?? true ? 'active' : 'inactive'}`}>
+                      {product.promotionActive ?? true ? '● Active' : '○ Paused'}
+                    </span>
+                  </label>
+                </div>
+
+                <div className="promo-preview-banner">
+                  <span className="preview-sparkle">✨</span>
+                  <div className="preview-text">
+                    <strong>Buy {product.promotionBuyQuantity || 2} → Get {product.promotionFreeQuantity || 1} Free</strong>
+                    <p>Customer pays for {product.promotionBuyQuantity || 2}, receives {(product.promotionBuyQuantity || 2) + (product.promotionFreeQuantity || 1)} items. Stock reduces by {(product.promotionBuyQuantity || 2) + (product.promotionFreeQuantity || 1)}.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error && <p className="validation" style={{ gridColumn: '1 / -1' }}>{error}</p>}
         </div>
-        <footer style={{ display: 'flex', justifyContent: item.id ? 'space-between' : 'flex-end', alignItems: 'center', gap: '8px' }}>
+        <footer>
           {item.id ? (
             <button
               type="button"

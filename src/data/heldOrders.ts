@@ -6,6 +6,10 @@ export type GroceryCartItem = {
   kind: 'grocery'
   product: GroceryProduct
   quantity: number
+  paidQuantity?: number
+  freeQuantity?: number
+  totalQuantity?: number
+  promotionApplied?: boolean
   total: number
 }
 

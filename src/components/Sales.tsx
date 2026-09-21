@@ -404,27 +404,57 @@ export function Sales() {
                 <span>Unit Rate</span>
                 <span>Line Total</span>
               </div>
-              {inspectSale.items?.map((it, idx) => (
-                <div className="inspect-item-row" key={`${it.productId}-${idx}`}>
-                  <span>
-                    <b>{it.code ? `${it.code} - ` : ''}{it.productName}</b>
-                    <small>{it.productType === 'chicken' ? 'Fresh Chicken' : 'Grocery'}</small>
-                  </span>
-                  <span>
-                    {it.productType === 'chicken' && it.weightGrams
-                      ? `${(it.weightGrams / 1000).toFixed(3)} kg`
-                      : `${it.quantity} units`}
-                  </span>
-                  <span>
-                    {it.productType === 'chicken' && it.pricePerKg
-                      ? `${formatMoney(it.pricePerKg)}/kg`
-                      : formatMoney(it.unitPrice)}
-                  </span>
-                  <span>
-                    <strong>{formatMoney(it.total)}</strong>
-                  </span>
-                </div>
-              ))}
+              {inspectSale.items?.map((it, idx) => {
+                const isPromo = Boolean(it.promotionApplied || (it.freeQuantity != null && it.freeQuantity > 0))
+                const paid = it.paidQuantity != null ? it.paidQuantity : it.quantity
+                const free = it.freeQuantity != null ? it.freeQuantity : 0
+                const total = it.totalQuantity != null ? it.totalQuantity : (paid + free)
+
+                return (
+                  <div className="inspect-item-row" key={`${it.productId}-${idx}`}>
+                    <span>
+                      <b>{it.code ? `${it.code} - ` : ''}{it.productName}</b>
+                      <small>{it.productType === 'chicken' ? 'Fresh Chicken' : 'Grocery'}</small>
+                      {isPromo && (
+                        <div style={{ marginTop: '2px', fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
+                          🎁 BUY {it.promotionBuyQuantity || 2} GET {it.promotionFreeQuantity || 1} FREE
+                        </div>
+                      )}
+                    </span>
+                    <span>
+                      {it.productType === 'chicken' && it.weightGrams
+                        ? `${(it.weightGrams / 1000).toFixed(3)} kg`
+                        : isPromo
+                        ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
+                            <span>Paid: <b>{paid}</b></span>
+                            <span style={{ color: '#10b981' }}>Free: <b>{free}</b></span>
+                            <span style={{ fontWeight: 700, color: '#f8fafc' }}>Total: {total}</span>
+                          </div>
+                        )
+                        : `${it.quantity} units`}
+                    </span>
+                    <span>
+                      {it.productType === 'chicken' && it.pricePerKg
+                        ? `${formatMoney(it.pricePerKg)}/kg`
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span>{formatMoney(it.unitPrice)}</span>
+                            {isPromo && <small style={{ color: '#94a3b8' }}>Unit Price</small>}
+                          </div>
+                        )}
+                    </span>
+                    <span>
+                      <strong>{formatMoney(it.total)}</strong>
+                      {isPromo && (
+                        <small style={{ display: 'block', color: '#10b981', fontSize: '11px', fontWeight: 600 }}>
+                          Charged: {formatMoney(it.total)}
+                        </small>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             <div className="inspect-totals-box">

@@ -41,19 +41,38 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         price_per_kg?: number | string
         cost_price?: number | string
         total?: number | string
+        paid_quantity?: number | string
+        free_quantity?: number | string
+        total_quantity?: number | string
+        promotion_applied?: boolean
+        promotion_type?: string
+        promotion_buy_quantity?: number | string
+        promotion_free_quantity?: number | string
       }>
 
-      const items: SaleItem[] = rawItems.map(si => ({
-        productId: si.product_id || '',
-        productName: si.product_name || 'Item',
-        productType: (si.product_type as 'chicken' | 'grocery') || 'grocery',
-        quantity: Number(si.quantity || 1),
-        weightGrams: si.weight_grams ? Number(si.weight_grams) : null,
-        unitPrice: Number(si.unit_price || 0),
-        pricePerKg: si.price_per_kg ? Number(si.price_per_kg) : null,
-        costPrice: si.cost_price ? Number(si.cost_price) : null,
-        total: Number(si.total || 0),
-      }))
+      const items: SaleItem[] = rawItems.map(si => {
+        const paidQty = si.paid_quantity != null ? Number(si.paid_quantity) : Number(si.quantity || 1)
+        const freeQty = si.free_quantity != null ? Number(si.free_quantity) : 0
+        const totalQty = si.total_quantity != null ? Number(si.total_quantity) : (paidQty + freeQty)
+        return {
+          productId: si.product_id || '',
+          productName: si.product_name || 'Item',
+          productType: (si.product_type as 'chicken' | 'grocery') || 'grocery',
+          quantity: paidQty,
+          weightGrams: si.weight_grams ? Number(si.weight_grams) : null,
+          unitPrice: Number(si.unit_price || 0),
+          pricePerKg: si.price_per_kg ? Number(si.price_per_kg) : null,
+          costPrice: si.cost_price ? Number(si.cost_price) : null,
+          total: Number(si.total || 0),
+          paidQuantity: paidQty,
+          freeQuantity: freeQty,
+          totalQuantity: totalQty,
+          promotionApplied: Boolean(si.promotion_applied || freeQty > 0),
+          promotionType: si.promotion_type || null,
+          promotionBuyQuantity: si.promotion_buy_quantity != null ? Number(si.promotion_buy_quantity) : null,
+          promotionFreeQuantity: si.promotion_free_quantity != null ? Number(si.promotion_free_quantity) : null,
+        }
+      })
 
       const year = soldAtDate.getFullYear()
       const month = String(soldAtDate.getMonth() + 1).padStart(2, '0')
@@ -75,6 +94,7 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         amountReceived: Number(row.amount_received || 0),
         change: Number(row.change || 0),
         cashier: row.cashier || 'Cashier',
+        customerId: row.customer_id || undefined,
         customerName: row.customer_name || 'Walk-in Customer',
         status: (row.status as 'completed' | 'cancelled') || 'completed',
       }
@@ -183,6 +203,7 @@ export const saveSale = async (sale: Sale) => {
       invoice_number: sale.invoiceNumber,
       sold_at: soldAt,
       cashier: sale.cashier,
+      customer_id: sale.customerId || null,
       customer_name: sale.customerName,
       subtotal: sale.subtotal,
       discount: sale.discount,
@@ -216,6 +237,13 @@ export const saveSale = async (sale: Sale) => {
       price_per_kg: item.pricePerKg,
       cost_price: item.costPrice,
       total: item.total,
+      paid_quantity: item.paidQuantity ?? item.quantity,
+      free_quantity: item.freeQuantity ?? 0,
+      total_quantity: item.totalQuantity ?? (item.quantity + (item.freeQuantity || 0)),
+      promotion_applied: Boolean(item.promotionApplied),
+      promotion_type: item.promotionType || null,
+      promotion_buy_quantity: item.promotionBuyQuantity ?? null,
+      promotion_free_quantity: item.promotionFreeQuantity ?? null,
     }))
   )
   return sale
@@ -234,6 +262,7 @@ export const completeSaleAtomically = async (
       invoice_number: currentSale.invoiceNumber,
       sold_at: soldAt,
       cashier: currentSale.cashier,
+      customer_id: currentSale.customerId || null,
       customer_name: currentSale.customerName,
       subtotal: currentSale.subtotal,
       discount: currentSale.discount,
@@ -250,6 +279,13 @@ export const completeSaleAtomically = async (
         product_name: item.productName,
         product_type: item.productType,
         quantity: item.quantity,
+        paid_quantity: item.paidQuantity ?? item.quantity,
+        free_quantity: item.freeQuantity ?? 0,
+        total_quantity: item.totalQuantity ?? (item.quantity + (item.freeQuantity || 0)),
+        promotion_applied: Boolean(item.promotionApplied),
+        promotion_type: item.promotionType || null,
+        promotion_buy_quantity: item.promotionBuyQuantity ?? null,
+        promotion_free_quantity: item.promotionFreeQuantity ?? null,
         weight_grams: item.weightGrams,
         unit_price: item.unitPrice,
         price_per_kg: item.pricePerKg,

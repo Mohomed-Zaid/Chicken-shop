@@ -10,8 +10,21 @@ import { useAuth } from '../context/AuthContext'
 import { useSubscription } from '../context/SubscriptionContext'
 import { ConnectionIndicator } from './PwaManager'
 import { heldOrdersStore, generateHeldOrderId, type HeldOrder } from '../data/heldOrders'
+import { calculatePromotion, isPromotionActive, formatPromotionBadge } from '../services/promotionService'
+import { customerStore, getCustomerOutstanding, type Customer } from '../data/customers'
+import { syncCustomerToSupabase } from '../services/supabase/customerService'
 
-type GroceryCartItem = { id: string; kind: 'grocery'; product: GroceryProduct; quantity: number; total: number }
+type GroceryCartItem = {
+  id: string
+  kind: 'grocery'
+  product: GroceryProduct
+  quantity: number // Customer paid quantity
+  paidQuantity: number
+  freeQuantity: number
+  totalQuantity: number
+  promotionApplied: boolean
+  total: number
+}
 type Cart = ChickenCartItem | GroceryCartItem
 
 const quickWeights = [250, 500, 750, 1000, 1500, 2000]
@@ -36,6 +49,67 @@ const parseWeightInGrams = (value: string): number | null => {
   }
   return Math.round(numeric)
 }
+
+function CartItemQtyInput({
+  quantity,
+  maxStock,
+  onChangeQty,
+  onEnter,
+}: {
+  quantity: number
+  maxStock: number
+  onChangeQty: (newQty: number) => boolean
+  onEnter?: () => void
+}) {
+  const [val, setVal] = useState(String(quantity))
+
+  useEffect(() => {
+    setVal(String(quantity))
+  }, [quantity])
+
+  const commit = (inputStr: string) => {
+    const parsed = parseInt(inputStr, 10)
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      const ok = onChangeQty(parsed)
+      if (!ok) {
+        setVal(String(quantity))
+      }
+    } else {
+      setVal(String(quantity))
+    }
+  }
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={maxStock}
+      className="input-qty-inline"
+      value={val}
+      aria-label="Quantity"
+      onFocus={e => e.target.select()}
+      onChange={e => {
+        const next = e.target.value
+        setVal(next)
+        const parsed = parseInt(next, 10)
+        if (Number.isFinite(parsed) && parsed >= 1) {
+          onChangeQty(parsed)
+        }
+      }}
+      onBlur={() => commit(val)}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit(val)
+          onEnter?.()
+        }
+      }}
+      onKeyUp={e => e.stopPropagation()}
+    />
+  )
+}
+
 
 function PosLiveHeader() {
   const [now, setNow] = useState<Date>(() => new Date())
@@ -94,28 +168,85 @@ function PosLiveHeader() {
 
 function PaymentModal({
   total,
+  selectedCustomer,
+  onSelectCustomer,
   onCancel,
   onComplete,
 }: {
   total: number
+  selectedCustomer: Customer | null
+  onSelectCustomer: (c: Customer | null) => void
   onCancel: () => void
-  onComplete: (method: PaymentMethod, received: number) => void
+  onComplete: (method: PaymentMethod, received: number, customer?: Customer | null) => void
 }) {
   const [method, setMethod] = useState<PaymentMethod>('Cash')
   const [error, setError] = useState('')
   const [processing, setProcessing] = useState(false)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
+  const [quickName, setQuickName] = useState('')
+  const [quickPhone, setQuickPhone] = useState('')
+  const [customerList, setCustomerList] = useState<Customer[]>(() =>
+    customerStore.getCustomers().filter(c => c.active)
+  )
+
+  const reloadCustomers = () => {
+    setCustomerList(customerStore.getCustomers().filter(c => c.active))
+  }
+
+  const currentOutstanding = selectedCustomer ? getCustomerOutstanding(selectedCustomer.id) : 0
+
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickName.trim()) return
+    const newCust: Customer = {
+      id: `customer-${Date.now()}`,
+      name: quickName.trim(),
+      phone: quickPhone.trim(),
+      openingBalance: 0,
+      creditLimit: 0,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    customerStore.saveCustomer(newCust)
+    if (storageAdapter.isSupabase()) {
+      try {
+        await syncCustomerToSupabase(newCust)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    reloadCustomers()
+    onSelectCustomer(newCust)
+    setShowQuickAdd(false)
+    setQuickName('')
+    setQuickPhone('')
+    setError('')
+  }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (processing) return
+
+    if (method === 'Credit') {
+      if (!selectedCustomer) {
+        setError('Only registered customers can buy on credit. Please select a customer.')
+        return
+      }
+      setProcessing(true)
+      setError('')
+      onComplete('Credit', 0, selectedCustomer)
+      return
+    }
+
     setProcessing(true)
     setError('')
-    onComplete(method, total)
+    onComplete(method, total, selectedCustomer)
   }
 
   return (
     <div className="shade">
-      <form className="dialog pos-payment-modal" onSubmit={submit}>
+      <form className="dialog pos-payment-modal" onSubmit={submit} style={{ maxWidth: '500px' }}>
         <header>
           <div>
             <small>CHECKOUT & BILLING</small>
@@ -132,7 +263,7 @@ function PaymentModal({
 
           <div className="payment-method-selector">
             <label>PAYMENT METHOD</label>
-            <div className="method-button-group">
+            <div className="method-button-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <button
                 type="button"
                 className={`method-btn ${method === 'Cash' ? 'active' : ''}`}
@@ -157,6 +288,23 @@ function PaymentModal({
               </button>
               <button
                 type="button"
+                className={`method-btn ${method === 'Credit' ? 'active' : ''}`}
+                onClick={() => {
+                  setMethod('Credit')
+                  setError('')
+                }}
+                disabled={processing}
+                style={{
+                  border: method === 'Credit' ? '2px solid #f3b625' : '1px solid #364858',
+                  background: method === 'Credit' ? '#27384a' : '#1b2733',
+                }}
+              >
+                <span style={{ color: method === 'Credit' ? '#f3b625' : '#ffffff', fontWeight: 800 }}>
+                  🏷️ CREDIT / PAY LATER
+                </span>
+              </button>
+              <button
+                type="button"
                 className={`method-btn ${method === 'Other' ? 'active' : ''}`}
                 onClick={() => {
                   setMethod('Other')
@@ -170,13 +318,112 @@ function PaymentModal({
           </div>
 
           {method === 'Cash' && (
-            <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(232, 170, 21, 0.08)', borderRadius: '8px', border: '1px solid rgba(232, 170, 21, 0.25)', marginTop: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '14px', background: 'rgba(232, 170, 21, 0.08)', borderRadius: '8px', border: '1px solid rgba(232, 170, 21, 0.25)', marginTop: '12px' }}>
               <span style={{ fontSize: '12px', color: '#9bb1c4', display: 'block', marginBottom: '4px' }}>EXACT CASH PAYMENT</span>
               <b style={{ fontSize: '24px', color: '#f3b625', fontWeight: 900 }}>{formatMoney(total)}</b>
             </div>
           )}
 
-          {error && <p className="validation">{error}</p>}
+          {method === 'Credit' && (
+            <div style={{ marginTop: '14px', background: 'rgba(243, 182, 37, 0.08)', border: '1px solid rgba(243, 182, 37, 0.25)', borderRadius: '8px', padding: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ color: '#f3b625', fontWeight: 800, fontSize: '11px', letterSpacing: '0.5px', margin: 0 }}>
+                  CREDIT ACCOUNT (CUSTOMER) *
+                </label>
+                {!showQuickAdd && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAdd(true)}
+                    style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                  >
+                    + Add New Customer
+                  </button>
+                )}
+              </div>
+
+              {!showQuickAdd ? (
+                <div style={{ marginTop: '8px' }}>
+                  <select
+                    value={selectedCustomer?.id || ''}
+                    onChange={e => {
+                      const found = customerList.find(c => c.id === e.target.value) || null
+                      onSelectCustomer(found)
+                      setError('')
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: '#111a24',
+                      color: '#ffffff',
+                      border: '1px solid #364858',
+                      borderRadius: '5px',
+                      fontSize: '13px',
+                    }}
+                  >
+                    <option value="">-- Choose Registered Customer --</option>
+                    {customerList.map(c => {
+                      const due = getCustomerOutstanding(c.id)
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.phone ? `(${c.phone})` : ''} {due > 0 ? `· Current Due: ${formatMoney(due)}` : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              ) : (
+                <div style={{ marginTop: '8px', background: '#162330', padding: '10px', borderRadius: '6px', border: '1px solid #364858' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <input
+                      placeholder="Customer Name *"
+                      value={quickName}
+                      onChange={e => setQuickName(e.target.value)}
+                      autoFocus
+                    />
+                    <input
+                      placeholder="Phone"
+                      value={quickPhone}
+                      onChange={e => setQuickPhone(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                    <button type="button" onClick={() => setShowQuickAdd(false)} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                      Cancel
+                    </button>
+                    <button type="button" className="confirm" onClick={handleQuickAdd} style={{ fontSize: '11px', padding: '4px 10px' }}>
+                      Save & Select
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedCustomer ? (
+                <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(243, 182, 37, 0.2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                    <span style={{ color: '#94a3b8' }}>Current Outstanding:</span>
+                    <b>{formatMoney(currentOutstanding)}</b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                    <span style={{ color: '#94a3b8' }}>This Bill (Pay Later):</span>
+                    <b style={{ color: '#f3b625' }}>+{formatMoney(total)}</b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px dashed #364858', paddingTop: '4px' }}>
+                    <span style={{ color: '#ffffff', fontWeight: 700 }}>New Total Outstanding:</span>
+                    <b style={{ color: '#f3b625', fontSize: '16px' }}>{formatMoney(currentOutstanding + total)}</b>
+                  </div>
+                  <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>
+                    ℹ️ Customer does not pay anything today. Amount will be recorded as <strong>DUE</strong> under <strong>{selectedCustomer.name}</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px', fontWeight: 600 }}>
+                  ⚠️ Only registered customers can buy on credit. The cashier must select a customer.
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && <p className="validation" style={{ marginTop: '10px' }}>{error}</p>}
           {processing && <p className="pos-notice">Processing transaction with server...</p>}
         </div>
 
@@ -184,11 +431,217 @@ function PaymentModal({
           <button type="button" onClick={onCancel} disabled={processing}>
             Cancel
           </button>
-          <button className="confirm btn-complete-sale" disabled={processing}>
-            {processing ? 'Processing...' : `🖨️ Complete Sale & Print · ${formatMoney(total)}`}
+          <button
+            className="confirm btn-complete-sale"
+            disabled={processing || (method === 'Credit' && !selectedCustomer)}
+          >
+            {processing
+              ? 'Processing...'
+              : method === 'Credit'
+                ? `🏷️ Confirm Credit Sale (Pay Later) · ${formatMoney(total)}`
+                : `🖨️ Complete Sale & Print · ${formatMoney(total)}`}
           </button>
         </footer>
       </form>
+    </div>
+  )
+}
+
+function PosCustomerPickerModal({
+  selectedCustomer,
+  onSelectCustomer,
+  onClose,
+}: {
+  selectedCustomer: Customer | null
+  onSelectCustomer: (c: Customer | null) => void
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const customers = customerStore.getCustomers().filter(c => c.active)
+
+  const filtered = customers.filter(c =>
+    `${c.name} ${c.phone || ''} ${c.address || ''}`.toLowerCase().includes(query.toLowerCase())
+  )
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    const newCust: Customer = {
+      id: `customer-${Date.now()}`,
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      openingBalance: 0,
+      creditLimit: 0,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    customerStore.saveCustomer(newCust)
+    if (storageAdapter.isSupabase()) {
+      try {
+        await syncCustomerToSupabase(newCust)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    onSelectCustomer(newCust)
+    onClose()
+  }
+
+  return (
+    <div className="shade">
+      <div className="dialog custom-dialog" style={{ maxWidth: '480px' }}>
+        <header>
+          <div>
+            <small>CUSTOMER SELECTION</small>
+            <h2>{showAdd ? 'New Customer' : 'Select Customer'}</h2>
+          </div>
+          <button type="button" onClick={onClose}>×</button>
+        </header>
+
+        <div className="editor-body">
+          {!showAdd ? (
+            <>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  autoFocus
+                  placeholder="Search by name or phone..."
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="primary"
+                  style={{ whiteSpace: 'nowrap', fontSize: '12px', padding: '6px 12px' }}
+                  onClick={() => setShowAdd(true)}
+                >
+                  + Add New
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
+                {/* Walk-in Customer Option */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectCustomer(null)
+                    onClose()
+                  }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    background: !selectedCustomer ? '#1e3a5f' : '#14202b',
+                    border: '1px solid #2d3f52',
+                    borderRadius: '6px',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div>
+                    <b>👤 Walk-in Customer</b>
+                    <small style={{ display: 'block', color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>
+                      Standard cash/card sales (No credit)
+                    </small>
+                  </div>
+                  {!selectedCustomer && <span style={{ color: '#38bdf8', fontWeight: 800 }}>✓ Selected</span>}
+                </button>
+
+                {filtered.map(c => {
+                  const isSelected = selectedCustomer?.id === c.id
+                  const due = getCustomerOutstanding(c.id)
+                  return (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => {
+                        onSelectCustomer(c)
+                        onClose()
+                      }}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        background: isSelected ? '#1e3a5f' : '#14202b',
+                        border: '1px solid #2d3f52',
+                        borderRadius: '6px',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div>
+                        <b>{c.name}</b>
+                        <small style={{ display: 'block', color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>
+                          {c.phone || 'No phone'} {c.address ? `· ${c.address}` : ''}
+                        </small>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {due > 0 ? (
+                          <span style={{ color: '#f3b625', fontWeight: 800, fontSize: '12px' }}>
+                            Due: {formatMoney(due)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#10b981', fontSize: '11px' }}>No dues</span>
+                        )}
+                        {isSelected && (
+                          <div style={{ color: '#38bdf8', fontWeight: 800, fontSize: '11px' }}>✓ Selected</div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleCreate}>
+              <label>
+                CUSTOMER NAME *
+                <input
+                  autoFocus
+                  placeholder="e.g. Kamal"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                />
+              </label>
+              <label style={{ marginTop: '10px' }}>
+                PHONE NUMBER
+                <input
+                  placeholder="e.g. 0771234567"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                />
+              </label>
+              <label style={{ marginTop: '10px' }}>
+                ADDRESS
+                <input
+                  placeholder="e.g. Kadawatha"
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                />
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
+                <button type="button" onClick={() => setShowAdd(false)}>Back</button>
+                <button type="submit" className="confirm">Save & Select</button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <footer>
+          <button type="button" onClick={onClose}>Close</button>
+        </footer>
+      </div>
     </div>
   )
 }
@@ -291,6 +744,8 @@ function HoldConfirmModal({
                         ? item.weightGrams >= 1000
                           ? `${(item.weightGrams / 1000).toFixed(2).replace(/\.00$/, '')} kg`
                           : `${item.weightGrams}g`
+                        : item.freeQuantity && item.freeQuantity > 0
+                        ? `(${item.paidQuantity} Paid + ${item.freeQuantity} Free = ${item.totalQuantity})`
                         : `×${item.quantity} ${item.product.unit || ''}`}
                     </small>
                   </span>
@@ -519,6 +974,8 @@ export function PosPayment({
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => heldOrdersStore.get())
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false)
   const [isRecallModalOpen, setIsRecallModalOpen] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false)
   const [collisionOrder, setCollisionOrder] = useState<HeldOrder | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [autoPrintAfterSale, setAutoPrintAfterSale] = useState(false)
@@ -657,19 +1114,37 @@ export function PosPayment({
     const found = cart.find(item => item.kind === 'grocery' && item.product.id === product.id) as
       | GroceryCartItem
       | undefined
-    if (found && found.quantity >= product.stockQuantity)
+
+    const nextPaid = found ? found.quantity + 1 : 1
+    const promo = calculatePromotion(nextPaid, product)
+    const reqTotal = promo.totalQuantity
+
+    if (reqTotal > product.stockQuantity) {
+      if (promo.promotionApplied) {
+        return setNotice(`Insufficient stock for promotion. Available: ${product.stockQuantity}, Required: ${reqTotal}`)
+      }
       return setNotice(`Insufficient stock for ${product.name}. Available: ${product.stockQuantity}`)
+    }
 
     const hasDiscount = Boolean(
       product.discountPrice && product.discountPrice > 0 && product.discountPrice < product.sellingPrice
     )
     const unitPrice = hasDiscount ? product.discountPrice! : product.sellingPrice
+    const itemTotal = nextPaid * unitPrice
 
     setCart(current =>
       found
         ? current.map(item =>
           item.id === found.id
-            ? { ...found, quantity: found.quantity + 1, total: (found.quantity + 1) * unitPrice }
+            ? {
+              ...found,
+              quantity: nextPaid,
+              paidQuantity: promo.paidQuantity,
+              freeQuantity: promo.freeQuantity,
+              totalQuantity: promo.totalQuantity,
+              promotionApplied: promo.promotionApplied,
+              total: itemTotal,
+            }
             : item
         )
         : [
@@ -679,7 +1154,11 @@ export function PosPayment({
             kind: 'grocery',
             product,
             quantity: 1,
-            total: unitPrice,
+            paidQuantity: promo.paidQuantity,
+            freeQuantity: promo.freeQuantity,
+            totalQuantity: promo.totalQuantity,
+            promotionApplied: promo.promotionApplied,
+            total: itemTotal,
           },
         ]
     )
@@ -694,8 +1173,14 @@ export function PosPayment({
       if (nextQty <= 0) {
         return current.filter(i => i.id !== item.id)
       }
-      if (nextQty > item.product.stockQuantity) {
-        setNotice(`Maximum available stock reached for ${item.product.name}.`)
+      const promo = calculatePromotion(nextQty, item.product)
+      const reqTotal = promo.totalQuantity
+      if (reqTotal > item.product.stockQuantity) {
+        if (promo.promotionApplied) {
+          setNotice(`Insufficient stock for promotion. Available: ${item.product.stockQuantity}, Required: ${reqTotal}`)
+        } else {
+          setNotice(`Maximum available stock reached for ${item.product.name}.`)
+        }
         return current
       }
       const hasDiscount = Boolean(
@@ -705,9 +1190,62 @@ export function PosPayment({
       )
       const unitPrice = hasDiscount ? item.product.discountPrice! : item.product.sellingPrice
       return current.map(i =>
-        i.id === item.id ? { ...item, quantity: nextQty, total: nextQty * unitPrice } : i
+        i.id === item.id
+          ? {
+            ...item,
+            quantity: nextQty,
+            paidQuantity: promo.paidQuantity,
+            freeQuantity: promo.freeQuantity,
+            totalQuantity: promo.totalQuantity,
+            promotionApplied: promo.promotionApplied,
+            total: nextQty * unitPrice,
+          }
+          : i
       )
     })
+  }
+
+  const setGroceryDirectQty = (productId: string, directQty: number): boolean => {
+    let accepted = false
+    setCart(current => {
+      const item = current.find(i => i.kind === 'grocery' && i.product.id === productId) as GroceryCartItem | undefined
+      if (!item) return current
+      if (directQty <= 0) {
+        return current
+      }
+      const promo = calculatePromotion(directQty, item.product)
+      const reqTotal = promo.totalQuantity
+      if (reqTotal > item.product.stockQuantity) {
+        if (promo.promotionApplied) {
+          setNotice(`Insufficient stock for promotion. Available: ${item.product.stockQuantity}, Required: ${reqTotal}`)
+        } else {
+          setNotice(`Maximum available stock reached for ${item.product.name}. Available: ${item.product.stockQuantity}`)
+        }
+        return current
+      }
+      setNotice('')
+      accepted = true
+      const hasDiscount = Boolean(
+        item.product.discountPrice &&
+        item.product.discountPrice > 0 &&
+        item.product.discountPrice < item.product.sellingPrice
+      )
+      const unitPrice = hasDiscount ? item.product.discountPrice! : item.product.sellingPrice
+      return current.map(i =>
+        i.id === item.id
+          ? {
+            ...item,
+            quantity: directQty,
+            paidQuantity: promo.paidQuantity,
+            freeQuantity: promo.freeQuantity,
+            totalQuantity: promo.totalQuantity,
+            promotionApplied: promo.promotionApplied,
+            total: directQty * unitPrice,
+          }
+          : i
+      )
+    })
+    return accepted
   }
 
   const removeFromCart = (id: string) => {
@@ -936,17 +1474,27 @@ export function PosPayment({
     }
   }
 
-  const completeSale = async (paymentMethod: PaymentMethod, amountReceived: number) => {
+  const completeSale = async (
+    paymentMethod: PaymentMethod,
+    amountReceived: number,
+    customer?: Customer | null
+  ) => {
     try {
       const groceryCart = cart.filter((item): item is GroceryCartItem => item.kind === 'grocery')
       for (const item of groceryCart) {
         const current = groceryItems.find(product => product.id === item.product.id)
-        if (!current || item.quantity > current.stockQuantity)
+        const reqTotal = item.totalQuantity || item.quantity
+        if (!current || reqTotal > current.stockQuantity) {
+          if (item.freeQuantity && item.freeQuantity > 0) {
+            throw new Error(`Insufficient stock for promotion. Available: ${current ? current.stockQuantity : 0}, Required: ${reqTotal}`)
+          }
           throw new Error(`Insufficient stock for ${item.product.name}.`)
+        }
       }
 
       const nextGrocery = groceryItems.map(product => {
-        const sold = groceryCart.find(item => item.product.id === product.id)?.quantity || 0
+        const cartItem = groceryCart.find(item => item.product.id === product.id)
+        const sold = cartItem ? (cartItem.totalQuantity || cartItem.quantity) : 0
         return sold ? { ...product, stockQuantity: product.stockQuantity - sold, updatedAt: new Date().toISOString() } : product
       })
 
@@ -980,6 +1528,13 @@ export function PosPayment({
             pricePerKg: null,
             costPrice: item.product.costPrice,
             total: item.total,
+            paidQuantity: item.paidQuantity ?? item.quantity,
+            freeQuantity: item.freeQuantity ?? 0,
+            totalQuantity: item.totalQuantity ?? (item.quantity + (item.freeQuantity || 0)),
+            promotionApplied: Boolean(item.promotionApplied),
+            promotionType: item.promotionApplied ? (item.product.promotionType || 'BUY_X_GET_Y_FREE') : null,
+            promotionBuyQuantity: item.promotionApplied ? (item.product.promotionBuyQuantity ?? null) : null,
+            promotionFreeQuantity: item.promotionApplied ? (item.product.promotionFreeQuantity ?? null) : null,
           }
       )
 
@@ -998,6 +1553,13 @@ export function PosPayment({
         }
       }
 
+      const currentCust = customer !== undefined ? customer : selectedCustomer
+      const isCredit = paymentMethod === 'Credit'
+      const finalReceived = isCredit ? 0 : amountReceived
+      const finalChange = isCredit ? 0 : Math.max(0, amountReceived - total)
+      const custId = currentCust?.id || undefined
+      const custName = currentCust?.name || 'Walk-in Customer'
+
       let sale: Sale = {
         id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         invoiceNumber: initialInvoice,
@@ -1010,10 +1572,11 @@ export function PosPayment({
         service: 0,
         total,
         paymentMethod,
-        amountReceived,
-        change: Math.max(0, amountReceived - total),
+        amountReceived: finalReceived,
+        change: finalChange,
         cashier: profile?.full_name || 'Cashier',
-        customerName: 'Walk-in Customer',
+        customerId: custId,
+        customerName: custName,
         status: 'completed',
       }
 
@@ -1065,7 +1628,7 @@ export function PosPayment({
           throw error
         }
         groceryCart.forEach(item =>
-          movementStore.addSale(item.product.id, item.product.name, item.quantity, sale.id, sale.invoiceNumber)
+          movementStore.addSale(item.product.id, item.product.name, item.totalQuantity || item.quantity, sale.id, sale.invoiceNumber)
         )
         localStorage.setItem(
           'sales-invoice-sequence',
@@ -1079,6 +1642,7 @@ export function PosPayment({
 
       setCart([])
       setPayment(false)
+      setSelectedCustomer(null)
       setCompleted(sale)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Sale could not be completed. No changes were made.')
@@ -1115,15 +1679,20 @@ export function PosPayment({
   // F4: Hold Current Bill
   // Auto-focus search bar on load and whenever dialogs/modals close
   useEffect(() => {
-    if (!isHoldModalOpen && !isRecallModalOpen && !selected && !payment && !completed && !collisionOrder) {
+    if (!isHoldModalOpen && !isRecallModalOpen && !isCustomerModalOpen && !selected && !payment && !completed && !collisionOrder) {
+      const activeEl = document.activeElement as HTMLElement | null
+      const activeTag = activeEl?.tagName?.toLowerCase()
+      if (activeTag === 'input' || activeTag === 'textarea') {
+        return
+      }
       scanInputRef.current?.focus()
     }
-  }, [isHoldModalOpen, isRecallModalOpen, selected, payment, completed, collisionOrder, cart])
+  }, [isHoldModalOpen, isRecallModalOpen, isCustomerModalOpen, selected, payment, completed, collisionOrder])
 
   // Refocus search bar when user clicks anywhere in POS workspace (unless clicking buttons/inputs/modals)
   useEffect(() => {
     const handleWorkspaceClick = (e: MouseEvent) => {
-      if (isHoldModalOpen || isRecallModalOpen || selected || payment || completed || collisionOrder) {
+      if (isHoldModalOpen || isRecallModalOpen || isCustomerModalOpen || selected || payment || completed || collisionOrder) {
         return
       }
       const target = e.target as HTMLElement | null
@@ -1139,7 +1708,7 @@ export function PosPayment({
     }
     window.addEventListener('click', handleWorkspaceClick)
     return () => window.removeEventListener('click', handleWorkspaceClick)
-  }, [isHoldModalOpen, isRecallModalOpen, selected, payment, completed, collisionOrder])
+  }, [isHoldModalOpen, isRecallModalOpen, isCustomerModalOpen, selected, payment, completed, collisionOrder])
 
   // Global Keyboard shortcuts & Hardware Barcode Scanner Wedge Listener
   useEffect(() => {
@@ -1152,7 +1721,7 @@ export function PosPayment({
           window.print()
           return
         }
-        if (cart.length > 0 && !isSubmitting && !isHoldModalOpen && !isRecallModalOpen && !selected) {
+        if (cart.length > 0 && !isSubmitting && !isHoldModalOpen && !isRecallModalOpen && !isCustomerModalOpen && !selected) {
           handleDirectPrintSale()
         } else if (!cart.length && !completed) {
           setNotice('⚠️ Cart is empty. Please add products before printing.')
@@ -1161,7 +1730,7 @@ export function PosPayment({
       }
 
       // If any modal is open, do not intercept typing/scanning
-      if (isHoldModalOpen || isRecallModalOpen || selected || payment || completed || collisionOrder) {
+      if (isHoldModalOpen || isRecallModalOpen || isCustomerModalOpen || selected || payment || completed || collisionOrder) {
         return
       }
 
@@ -1302,7 +1871,18 @@ export function PosPayment({
   }
 
   const executeResume = (order: HeldOrder) => {
-    setCart(order.items)
+    const hydratedItems: Cart[] = order.items.map(item => {
+      if (item.kind === 'chicken') return item
+      const promo = calculatePromotion(item.quantity, item.product)
+      return {
+        ...item,
+        paidQuantity: item.paidQuantity ?? promo.paidQuantity,
+        freeQuantity: item.freeQuantity ?? promo.freeQuantity,
+        totalQuantity: item.totalQuantity ?? promo.totalQuantity,
+        promotionApplied: item.promotionApplied ?? promo.promotionApplied,
+      }
+    })
+    setCart(hydratedItems)
     heldOrdersStore.remove(order.id)
     setIsRecallModalOpen(false)
     setCollisionOrder(null)
@@ -1350,6 +1930,7 @@ export function PosPayment({
 
   const reset = () => {
     setCompleted(null)
+    setSelectedCustomer(null)
     setNotice('')
   }
 
@@ -1367,6 +1948,31 @@ export function PosPayment({
               <h2>Invoice #{salesStore.getNextInvoice()}</h2>
             </div>
             <div className="bill-header-actions">
+              <button
+                type="button"
+                className={`pos-customer-select-btn ${selectedCustomer ? 'has-customer' : ''}`}
+                onClick={() => setIsCustomerModalOpen(true)}
+                title="Select customer for credit or billing"
+              >
+                <span>👤 {selectedCustomer ? selectedCustomer.name : 'Walk-in Customer'}</span>
+                {selectedCustomer && getCustomerOutstanding(selectedCustomer.id) > 0 && (
+                  <span style={{ fontSize: '10px', color: '#f3b625', fontWeight: 800 }}>
+                    ({formatMoney(getCustomerOutstanding(selectedCustomer.id))})
+                  </span>
+                )}
+                <small>▾</small>
+              </button>
+              {selectedCustomer && (
+                <button
+                  type="button"
+                  className="btn-qty"
+                  style={{ width: '22px', height: '26px', fontSize: '12px' }}
+                  onClick={() => setSelectedCustomer(null)}
+                  title="Reset to Walk-in Customer"
+                >
+                  ×
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-hold-bill"
@@ -1556,6 +2162,11 @@ export function PosPayment({
                             : `${item.weightGrams}g`}
                         </span>
                       )}
+                      {item.kind === 'grocery' && item.freeQuantity && item.freeQuantity > 0 ? (
+                        <span className="pos-promo-cart-badge">
+                          🎁 {item.paidQuantity} Paid + {item.freeQuantity} Free = {item.totalQuantity}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="col-unit">
@@ -1588,14 +2199,24 @@ export function PosPayment({
                             type="button"
                             className="btn-qty"
                             onClick={() => updateGroceryQty(item.product.id, -1)}
+                            title="Decrease quantity"
                           >
                             -
                           </button>
-                          <span>{item.quantity}</span>
+                          <CartItemQtyInput
+                            quantity={item.quantity}
+                            maxStock={item.product.stockQuantity}
+                            onChangeQty={newQty => setGroceryDirectQty(item.product.id, newQty)}
+                            onEnter={() => {
+                              scanInputRef.current?.focus()
+                              scanInputRef.current?.select()
+                            }}
+                          />
                           <button
                             type="button"
                             className="btn-qty"
                             onClick={() => updateGroceryQty(item.product.id, 1)}
+                            title="Increase quantity"
                           >
                             +
                           </button>
@@ -1793,6 +2414,11 @@ export function PosPayment({
                             <span className="product-code-badge">#{product.code}</span>
                             <span className="product-title">{product.name}</span>
                             <span className="product-category-tag">{product.category}</span>
+                            {isPromotionActive(product) && (
+                              <div className="pos-btn-promo-tag">
+                                🎁 {formatPromotionBadge(product)}
+                              </div>
+                            )}
                           </div>
 
                           <div className="card-bottom">
@@ -1978,7 +2604,22 @@ export function PosPayment({
 
       {/* PAYMENT MODAL */}
       {payment && (
-        <PaymentModal total={total} onCancel={() => setPayment(false)} onComplete={completeSale} />
+        <PaymentModal
+          total={total}
+          selectedCustomer={selectedCustomer}
+          onSelectCustomer={setSelectedCustomer}
+          onCancel={() => setPayment(false)}
+          onComplete={completeSale}
+        />
+      )}
+
+      {/* CUSTOMER SELECTOR MODAL */}
+      {isCustomerModalOpen && (
+        <PosCustomerPickerModal
+          selectedCustomer={selectedCustomer}
+          onSelectCustomer={setSelectedCustomer}
+          onClose={() => setIsCustomerModalOpen(false)}
+        />
       )}
 
       {/* HOLD CONFIRM MODAL */}

@@ -11,6 +11,13 @@ export interface GroceryProduct {
   lowStockLevel: number
   unit: string
   active: boolean
+  promotionEnabled?: boolean | null
+  promotionType?: string | null
+  promotionBuyQuantity?: number | null
+  promotionFreeQuantity?: number | null
+  promotionStartDate?: string | null
+  promotionEndDate?: string | null
+  promotionActive?: boolean | null
   createdAt: string
   updatedAt: string
 }
