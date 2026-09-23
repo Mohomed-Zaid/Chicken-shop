@@ -18,8 +18,29 @@ export interface SaleItem {
   promotionType?: string | null;
   promotionBuyQuantity?: number | null;
   promotionFreeQuantity?: number | null;
+  sellingMode?: 'RETAIL' | 'WHOLESALE';
+  priceType?: 'RETAIL' | 'WHOLESALE';
 }
-export interface SaleTransaction { id: string; invoiceNumber: string; date: string; time: string; items: SaleItem[]; subtotal: number; discount: number; tax: number; service: number; total: number; paymentMethod: PaymentMethod; amountReceived: number; change: number; cashier: string; customerId?: string; customerName: string; status: SaleStatus }
+export interface SaleTransaction {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  time: string;
+  items: SaleItem[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  service: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  amountReceived: number;
+  change: number;
+  cashier: string;
+  customerId?: string;
+  customerName: string;
+  status: SaleStatus;
+  sellingMode?: 'RETAIL' | 'WHOLESALE';
+}
 export type Sale = SaleTransaction
 const sk = 'sales-transactions', ik = 'sales-invoice-sequence'
 const read = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) || '') as T } catch { return d } }

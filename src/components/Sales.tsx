@@ -13,6 +13,7 @@ export function Sales() {
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [paymentFilter, setPaymentFilter] = useState<string>('all')
+  const [sellingModeFilter, setSellingModeFilter] = useState<'all' | 'RETAIL' | 'WHOLESALE'>('all')
   const [selectedReceipt, setSelectedReceipt] = useState<Sale | null>(null)
   const [inspectSale, setInspectSale] = useState<Sale | null>(null)
 
@@ -94,7 +95,13 @@ export function Sales() {
       // 2. Payment Method Filter
       if (paymentFilter !== 'all' && sale.paymentMethod !== paymentFilter) return false
 
-      // 3. Search Query (Invoice, Customer, Cashier, Item)
+      // 3. Selling Mode Filter
+      if (sellingModeFilter !== 'all') {
+        const mode = sale.sellingMode || 'RETAIL'
+        if (mode !== sellingModeFilter) return false
+      }
+
+      // 4. Search Query (Invoice, Customer, Cashier, Item)
       if (search.trim()) {
         const q = search.trim().toLowerCase()
         const matchInvoice = sale.invoiceNumber.toLowerCase().includes(q)
@@ -106,7 +113,7 @@ export function Sales() {
 
       return true
     })
-  }, [sales, dateFilter, customStart, customEnd, paymentFilter, search, todayStr, yesterdayStr, weekStartStr, monthStartStr])
+  }, [sales, dateFilter, customStart, customEnd, paymentFilter, sellingModeFilter, search, todayStr, yesterdayStr, weekStartStr, monthStartStr])
 
   // Summary Metrics for filtered view
   const metrics = useMemo(() => {
@@ -119,13 +126,16 @@ export function Sales() {
     const cardTotal = completed.filter(s => s.paymentMethod === 'Card').reduce((sum, s) => sum + s.total, 0)
     const creditTotal = completed.filter(s => s.paymentMethod === 'Credit').reduce((sum, s) => sum + s.total, 0)
 
+    const retailTotal = completed.filter(s => (s.sellingMode || 'RETAIL') === 'RETAIL').reduce((sum, s) => sum + s.total, 0)
+    const wholesaleTotal = completed.filter(s => s.sellingMode === 'WHOLESALE').reduce((sum, s) => sum + s.total, 0)
+
     // Chicken total weight sold in this range
     const chickenKg = completed
       .flatMap(s => s.items || [])
       .filter(it => it.productType === 'chicken')
       .reduce((sum, it) => sum + (it.weightGrams || 0) / 1000, 0)
 
-    return { totalRevenue, billCount, avgBill, cashTotal, cardTotal, creditTotal, chickenKg }
+    return { totalRevenue, billCount, avgBill, cashTotal, cardTotal, creditTotal, chickenKg, retailTotal, wholesaleTotal }
   }, [filteredSales])
 
   const formatDisplayDate = (d: string) => {
@@ -176,8 +186,16 @@ export function Sales() {
           <b style={{ color: '#10b981' }}>{formatMoney(metrics.totalRevenue)}</b>
         </div>
         <div>
+          <small>RETAIL SALES</small>
+          <b style={{ color: '#60a5fa' }}>{formatMoney(metrics.retailTotal)}</b>
+        </div>
+        <div>
+          <small>WHOLESALE SALES</small>
+          <b style={{ color: '#38bdf8' }}>{formatMoney(metrics.wholesaleTotal)}</b>
+        </div>
+        <div>
           <small>BILLS COUNT</small>
-          <b style={{ color: '#38bdf8' }}>{metrics.billCount}</b>
+          <b style={{ color: '#f8fafc' }}>{metrics.billCount}</b>
         </div>
         <div>
           <small>AVERAGE TICKET</small>
@@ -233,6 +251,18 @@ export function Sales() {
           ))}
         </div>
 
+        {/* Selling Mode Filter */}
+        <select
+          className="sales-select-filter"
+          value={sellingModeFilter}
+          onChange={e => setSellingModeFilter(e.target.value as 'all' | 'RETAIL' | 'WHOLESALE')}
+          style={{ minWidth: '150px' }}
+        >
+          <option value="all">All Modes (සියල්ල)</option>
+          <option value="RETAIL">🛍️ Retail Only (සිල්ලර)</option>
+          <option value="WHOLESALE">📦 Wholesale Only (තොග)</option>
+        </select>
+
         {/* Payment Method Selector */}
         <select
           className="sales-select-filter"
@@ -276,7 +306,7 @@ export function Sales() {
           <span>Customer</span>
           <span>Items Summary</span>
           <span>Cashier</span>
-          <span>Payment</span>
+          <span>Payment &amp; Mode</span>
           <span>Total Amount</span>
           <span>Actions</span>
         </div>
@@ -300,7 +330,25 @@ export function Sales() {
               <div className="price-row sales-row" key={sale.id}>
                 {/* Invoice Column */}
                 <div className="sales-col-invoice">
-                  <strong className="invoice-number-text">#{sale.invoiceNumber}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                    <strong className="invoice-number-text">#{sale.invoiceNumber}</strong>
+                    {sale.sellingMode === 'WHOLESALE' && (
+                      <span
+                        className="badge-wholesale-mode"
+                        style={{
+                          background: '#0284c7',
+                          color: '#ffffff',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.5px',
+                        }}
+                      >
+                        WHOLESALE
+                      </span>
+                    )}
+                  </div>
                   <small className="sale-date-time">
                     {formatDisplayDate(sale.date)} · {sale.time}
                   </small>
@@ -323,10 +371,22 @@ export function Sales() {
                 </div>
 
                 {/* Payment Column */}
-                <div className="sales-col-payment">
-                  <span className={`payment-pill ${paymentBadgeClass(sale.paymentMethod)}`}>
-                    {sale.paymentMethod}
-                  </span>
+                <div className="sales-col-payment" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className={`payment-pill ${paymentBadgeClass(sale.paymentMethod)}`}>
+                      {sale.paymentMethod}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        color: sale.sellingMode === 'WHOLESALE' ? '#38bdf8' : '#94a3b8',
+                        letterSpacing: '0.4px',
+                      }}
+                    >
+                      {sale.sellingMode === 'WHOLESALE' ? '📦 WHOLESALE' : '🛍️ RETAIL'}
+                    </span>
+                  </div>
                   {sale.paymentMethod === 'Cash' && sale.change > 0 && (
                     <small style={{ color: '#94a3b8', fontSize: '10px' }}>
                       Change: {formatMoney(sale.change)}
@@ -392,6 +452,12 @@ export function Sales() {
                 <strong>{inspectSale.customerName || 'Walk-in Customer'}</strong>
               </div>
               <div>
+                <small>SELLING MODE</small>
+                <strong style={{ color: inspectSale.sellingMode === 'WHOLESALE' ? '#38bdf8' : '#60a5fa' }}>
+                  {inspectSale.sellingMode === 'WHOLESALE' ? '📦 WHOLESALE' : '🛍️ RETAIL'}
+                </strong>
+              </div>
+              <div>
                 <small>PAYMENT METHOD</small>
                 <strong>{inspectSale.paymentMethod}</strong>
               </div>
@@ -406,6 +472,7 @@ export function Sales() {
               </div>
               {inspectSale.items?.map((it, idx) => {
                 const isPromo = Boolean(it.promotionApplied || (it.freeQuantity != null && it.freeQuantity > 0))
+                const isWholesale = it.priceType === 'WHOLESALE' || it.sellingMode === 'WHOLESALE'
                 const paid = it.paidQuantity != null ? it.paidQuantity : it.quantity
                 const free = it.freeQuantity != null ? it.freeQuantity : 0
                 const total = it.totalQuantity != null ? it.totalQuantity : (paid + free)
@@ -415,6 +482,13 @@ export function Sales() {
                     <span>
                       <b>{it.code ? `${it.code} - ` : ''}{it.productName}</b>
                       <small>{it.productType === 'chicken' ? 'Fresh Chicken' : 'Grocery'}</small>
+                      {isWholesale && (
+                        <div style={{ marginTop: '3px' }}>
+                          <span style={{ background: '#0284c7', color: '#ffffff', fontSize: '10px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px' }}>
+                            📦 WHOLESALE
+                          </span>
+                        </div>
+                      )}
                       {isPromo && (
                         <div style={{ marginTop: '2px', fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
                           🎁 BUY {it.promotionBuyQuantity || 2} GET {it.promotionFreeQuantity || 1} FREE
@@ -440,6 +514,7 @@ export function Sales() {
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <span>{formatMoney(it.unitPrice)}</span>
+                            {isWholesale && <small style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>Wholesale Rate</small>}
                             {isPromo && <small style={{ color: '#94a3b8' }}>Unit Price</small>}
                           </div>
                         )}

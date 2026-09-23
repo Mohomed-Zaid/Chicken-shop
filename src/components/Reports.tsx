@@ -109,7 +109,7 @@ export function Reports({ isAdmin }: { isAdmin: boolean }) {
         </div>
         {active === 'Expense Report' && <ExpenseSection range={range} onPdf={() => downloadExpensePdf(getExpenseReport(range), range)} />}
         {active === 'Purchase Report' && <PurchaseSection range={range} onPdf={() => downloadPurchasePdf(getPurchaseReport(range), range)} />}
-        {active === 'Sales Report' && <SalesSection range={range} onPdf={() => downloadSalesPdf(getSalesReport(range), range)} />}
+        {active === 'Sales Report' && <SalesSection range={range} />}
         {active === 'Profit & Loss Report' && <ProfitLossSection range={range} onPdf={() => downloadProfitLossPdf(getProfitLossReport(range), range)} />}
       </div>
     </section>
@@ -119,6 +119,62 @@ function ReportHeader({ title, onPdf }: { title: string; onPdf: () => void }) { 
 function Empty() { return <p className="empty-report">No data found for the selected period.</p> }
 function ExpenseSection({ range, onPdf }: { range: ReportDateRange; onPdf: () => void }) { const report = getExpenseReport(range); return <><ReportHeader title="EXPENSE REPORT" onPdf={onPdf} /><div className="report-summary-grid"><ReportCard label="TOTAL EXPENSES" value={formatMoney(report.total)} /><ReportCard label="NUMBER OF EXPENSES" value={String(report.count)} /><ReportCard label="AVERAGE EXPENSE" value={formatMoney(report.average)} /><ReportCard label="LARGEST EXPENSE" value={formatMoney(report.largest)} /></div><h3>Expense by Category</h3><ReportTable head={['Category', 'Amount', 'Percentage']} rows={report.categories.map(item => [item.category, formatMoney(item.amount), `${item.percentage.toFixed(1)}%`])} /><h3>Expense Details</h3><ReportTable head={['Date', 'Category', 'Description', 'Payment', 'Amount']} rows={report.expenses.map(item => [item.date, item.category, item.description, item.paymentMethod, formatMoney(item.amount)])} empty={!report.expenses.length} footer={['', '', '', 'Total Expenses', formatMoney(report.total)]} /></> }
 function PurchaseSection({ range, onPdf }: { range: ReportDateRange; onPdf: () => void }) { const report = getPurchaseReport(range); return <><ReportHeader title="PURCHASE REPORT" onPdf={onPdf} /><div className="report-summary-grid"><ReportCard label="TOTAL PURCHASES" value={formatMoney(report.total)} /><ReportCard label="NUMBER OF PURCHASES" value={String(report.count)} /><ReportCard label="TOTAL PAID" value={formatMoney(report.paid)} /><ReportCard label="OUTSTANDING" value={formatMoney(report.outstanding)} /></div><ReportTable head={['Purchase No.', 'Date', 'Supplier', 'Payment', 'Total', 'Paid', 'Balance']} rows={report.purchases.map(item => [item.purchaseNumber, item.date, item.supplierName || '-', item.paymentMethod, formatMoney(item.total), formatMoney(item.amountPaid), formatMoney(item.balanceDue)])} empty={!report.purchases.length} footer={['', '', '', 'Totals', formatMoney(report.total), formatMoney(report.paid), formatMoney(report.outstanding)]} /></> }
-function SalesSection({ range, onPdf }: { range: ReportDateRange; onPdf: () => void }) { const report = getSalesReport(range); return <><ReportHeader title="SALES REPORT" onPdf={onPdf} /><div className="report-summary-grid"><ReportCard label="TOTAL SALES" value={formatMoney(report.total)} /><ReportCard label="NUMBER OF BILLS" value={String(report.count)} /><ReportCard label="AVERAGE BILL" value={formatMoney(report.average)} />{report.paymentMethods.slice(0, 2).map(item => <ReportCard key={item.method} label={`${item.method.toUpperCase()} SALES`} value={formatMoney(item.amount)} />)}</div><h3>Payment Method Summary</h3><ReportTable head={['Method', 'Amount', 'Percentage']} rows={report.paymentMethods.map(item => [item.method, formatMoney(item.amount), `${item.percentage.toFixed(1)}%`])} /><div className="report-split"><ReportTable head={['Sales Type', 'Amount']} rows={[['Chicken Sales', formatMoney(report.chickenSales)], ['Grocery Sales', formatMoney(report.grocerySales)]]} /><ReportTable head={['Product', 'Paid Qty', 'Free Qty', 'Total Given', 'Sales Amount']} rows={report.grocery.map(item => [item.name, String(item.paidQuantity), String(item.freeQuantity), String(item.totalQuantity), formatMoney(item.amount)])} /></div><h3>Completed Sales</h3><ReportTable head={['Invoice', 'Date', 'Time', 'Customer', 'Cashier', 'Payment', 'Total']} rows={report.sales.map(item => [item.invoiceNumber, item.date, item.time, item.customerName, item.cashier, item.paymentMethod, formatMoney(item.total)])} empty={!report.sales.length} /></> }
+function SalesSection({ range }: { range: ReportDateRange }) {
+  const [sellingModeFilter, setSellingModeFilter] = useState<'All' | 'Retail' | 'Wholesale'>('All')
+  const report = getSalesReport(range, sellingModeFilter)
+  const title = sellingModeFilter === 'All' ? 'SALES REPORT' : `SALES REPORT (${sellingModeFilter.toUpperCase()})`
+
+  return (
+    <>
+      <ReportHeader title={title} onPdf={() => downloadSalesPdf(report, range)} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }} className="no-print">
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Selling Mode:</span>
+        <div className="report-tabs" style={{ margin: 0 }}>
+          {(['All', 'Retail', 'Wholesale'] as const).map(mode => (
+            <button
+              key={mode}
+              className={sellingModeFilter === mode ? 'chosen' : ''}
+              onClick={() => setSellingModeFilter(mode)}
+              style={{ padding: '0.35rem 0.85rem', fontSize: '0.85rem' }}
+            >
+              {mode === 'All' ? 'All Sales' : mode === 'Retail' ? 'Retail Only' : 'Wholesale Only'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="report-summary-grid">
+        <ReportCard label="TOTAL SALES" value={formatMoney(report.total)} />
+        <ReportCard label="RETAIL SALES" value={formatMoney(report.totalRetailSales)} />
+        <ReportCard label="WHOLESALE SALES" value={formatMoney(report.totalWholesaleSales)} />
+        <ReportCard label="NUMBER OF BILLS" value={String(report.count)} />
+        <ReportCard label="AVERAGE BILL" value={formatMoney(report.average)} />
+        {report.paymentMethods.slice(0, 2).map(item => (
+          <ReportCard key={item.method} label={`${item.method.toUpperCase()} SALES`} value={formatMoney(item.amount)} />
+        ))}
+      </div>
+      <h3>Payment Method Summary</h3>
+      <ReportTable head={['Method', 'Amount', 'Percentage']} rows={report.paymentMethods.map(item => [item.method, formatMoney(item.amount), `${item.percentage.toFixed(1)}%`])} />
+      <div className="report-split">
+        <ReportTable head={['Sales Type', 'Amount']} rows={[['Chicken Sales', formatMoney(report.chickenSales)], ['Grocery Sales', formatMoney(report.grocerySales)]]} />
+        <ReportTable head={['Product', 'Paid Qty', 'Free Qty', 'Total Given', 'Sales Amount']} rows={report.grocery.map(item => [item.name, String(item.paidQuantity), String(item.freeQuantity), String(item.totalQuantity), formatMoney(item.amount)])} />
+      </div>
+      <h3>Completed Sales ({sellingModeFilter})</h3>
+      <ReportTable
+        head={['Invoice', 'Date', 'Time', 'Customer', 'Cashier', 'Payment', 'Mode', 'Total']}
+        rows={report.sales.map(item => [
+          item.invoiceNumber,
+          item.date,
+          item.time,
+          item.customerName,
+          item.cashier,
+          item.paymentMethod,
+          item.sellingMode || 'RETAIL',
+          formatMoney(item.total),
+        ])}
+        empty={!report.sales.length}
+      />
+    </>
+  )
+}
 function ProfitLossSection({ range, onPdf }: { range: ReportDateRange; onPdf: () => void }) { const report = getProfitLossReport(range); return <><ReportHeader title="PROFIT & LOSS REPORT" onPdf={onPdf} /><div className="pnl-statement"><h2>PROFIT & LOSS STATEMENT</h2><p>For: {range.start} - {range.end}</p>{[['Sales Revenue', formatMoney(report.salesRevenue)], ['Grocery Sales', formatMoney(report.groceryRevenue)], ['Chicken Sales Revenue', formatMoney(report.chickenSales)], ['Grocery COGS', formatMoney(report.groceryCogs)], ['Chicken COGS', 'Not Available'], ['Gross Profit', formatMoney(report.grossProfit)], ['Operating Expenses', formatMoney(report.operatingExpenses)], [report.net >= 0 ? 'Net Profit' : 'Net Loss', formatMoney(Math.abs(report.net))], ['Gross Margin', `${report.grossMargin.toFixed(2)}%`], ['Net Margin', `${report.netMargin.toFixed(2)}%`]].map(([label, value]) => <div className={label === 'Gross Profit' || label === 'Net Profit' || label === 'Net Loss' ? 'pnl-total' : ''} key={label}><span>{label}</span><b>{value}</b></div>)}</div></> }
 function ReportTable({ head, rows, empty = false, footer }: { head: string[]; rows: string[][]; empty?: boolean; footer?: string[] }) { return <section className="report-table-wrap"><table className="report-table"><thead><tr>{head.map(item => <th key={item}>{item}</th>)}</tr></thead><tbody>{empty ? <tr><td colSpan={head.length}><Empty /></td></tr> : rows.map((row, index) => <tr key={`${row[0]}-${index}`}>{row.map((cell, cellIndex) => <td key={`${cell}-${cellIndex}`}>{cell}</td>)}</tr>)}</tbody>{footer && <tfoot><tr>{footer.map((cell, index) => <td key={`${cell}-${index}`}>{cell}</td>)}</tr></tfoot>}</table></section> }

@@ -10,10 +10,30 @@ export interface GroceryReportItem {
   amount: number
 }
 
-export function getSalesReport(range: ReportDateRange) {
-  const sales = salesStore
+export type SalesReportModeFilter = 'All' | 'Retail' | 'Wholesale'
+
+export function getSalesReport(range: ReportDateRange, modeFilter: SalesReportModeFilter = 'All') {
+  const allRangeSales = salesStore
     .getSales()
     .filter(item => item.status === 'completed' && inReportRange(item.date, range))
+
+  const totalRetailSales = allRangeSales
+    .filter(s => (s.sellingMode || 'RETAIL') === 'RETAIL')
+    .reduce((sum, item) => sum + item.total, 0)
+
+  const totalWholesaleSales = allRangeSales
+    .filter(s => s.sellingMode === 'WHOLESALE')
+    .reduce((sum, item) => sum + item.total, 0)
+
+  const retailCount = allRangeSales.filter(s => (s.sellingMode || 'RETAIL') === 'RETAIL').length
+  const wholesaleCount = allRangeSales.filter(s => s.sellingMode === 'WHOLESALE').length
+
+  const sales = allRangeSales.filter(item => {
+    const mode = item.sellingMode || 'RETAIL'
+    if (modeFilter === 'Retail') return mode === 'RETAIL'
+    if (modeFilter === 'Wholesale') return mode === 'WHOLESALE'
+    return true
+  })
 
   const total = sales.reduce((sum, item) => sum + item.total, 0)
 
@@ -78,6 +98,11 @@ export function getSalesReport(range: ReportDateRange) {
     total,
     count: sales.length,
     average: sales.length ? total / sales.length : 0,
+    totalRetailSales,
+    totalWholesaleSales,
+    retailCount,
+    wholesaleCount,
+    modeFilter,
     paymentMethods,
     chickenSales,
     grocerySales,

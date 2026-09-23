@@ -171,12 +171,20 @@ export default function App() {
     }
   }
 
-  const updatePrice = (id: string, code: string, name: string, price: number) => {
+  const updatePrice = (id: string, code: string, name: string, price: number, wholesalePrice?: number | null) => {
     const current = items.find(item => item.id === id)
     if (!current) return
     const nextItems = items.map(item =>
       item.id === id
-        ? { ...item, code, name, cut: name, pricePerKg: price, updatedAt: new Date().toISOString() }
+        ? {
+            ...item,
+            code,
+            name,
+            cut: name,
+            pricePerKg: price,
+            wholesalePricePerKg: wholesalePrice !== undefined ? wholesalePrice : item.wholesalePricePerKg,
+            updatedAt: new Date().toISOString(),
+          }
         : item
     )
     commitItems(nextItems)
@@ -205,7 +213,7 @@ export default function App() {
     }
   }
 
-  const addItem = (code: string, name: string, price: number) =>
+  const addItem = (code: string, name: string, price: number, wholesalePrice?: number | null) =>
     commitItems([
       ...items,
       {
@@ -214,6 +222,7 @@ export default function App() {
         name,
         cut: name,
         pricePerKg: price,
+        wholesalePricePerKg: wholesalePrice || null,
         active: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

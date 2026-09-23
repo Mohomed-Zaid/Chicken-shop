@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test:promotions": "npx tsx src/services/__tests__/verifyPromotions.ts",
     "test:credit": "npx tsx src/services/__tests__/verifyCreditSystem.ts",
+    "test:wholesale": "npx tsx src/services/__tests__/verifyWholesalePricing.ts",
     "preview": "vite preview"
   },
   "dependencies": {

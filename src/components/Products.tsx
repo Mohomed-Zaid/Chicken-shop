@@ -19,6 +19,7 @@ export function Products({
   const [edit, setEdit] = useState<GroceryProduct | undefined>()
   const [deletingProduct, setDeletingProduct] = useState<GroceryProduct | null>(null)
   const [query, setQuery] = useState('')
+  const [pricingFilter, setPricingFilter] = useState<'ALL' | 'WHOLESALE' | 'RETAIL_ONLY'>('ALL')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState('')
   const [syncError, setSyncError] = useState('')
@@ -38,12 +39,24 @@ export function Products({
     }
   }
 
-  const list = items.filter(
-    item =>
+  const wholesaleCount = items.filter(i => i.wholesaleEnabled && i.wholesalePrice && Number(i.wholesalePrice) > 0).length
+  const retailOnlyCount = items.length - wholesaleCount
+
+  const list = items.filter(item => {
+    const matchesQuery =
       item.name.toLowerCase().includes(query.toLowerCase()) ||
       item.barcode.toLowerCase().includes(query.toLowerCase()) ||
       (item.code && item.code.toLowerCase().includes(query.toLowerCase()))
-  )
+    if (!matchesQuery) return false
+
+    if (pricingFilter === 'WHOLESALE') {
+      return Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
+    }
+    if (pricingFilter === 'RETAIL_ONLY') {
+      return !Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
+    }
+    return true
+  })
 
   return (
     <section className="prices-page">
@@ -75,6 +88,10 @@ export function Products({
                 barcode: '',
                 costPrice: 0,
                 sellingPrice: 0,
+                retailPrice: 0,
+                wholesaleEnabled: false,
+                wholesalePrice: null,
+                wholesaleMinQuantity: null,
                 stockQuantity: 0,
                 lowStockLevel: 0,
                 unit: 'Piece',
@@ -99,85 +116,140 @@ export function Products({
       {syncMessage && <div className="pos-notice" style={{ margin: '0 0 16px 0' }}>{syncMessage}</div>}
       {syncError && <div className="validation" style={{ margin: '0 0 16px 0' }}>{syncError}</div>}
 
-      <input
-        className="product-search"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder="Search products by code (e.g. 100), name or barcode..."
-      />
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <input
+          className="product-search"
+          style={{ flex: 1, minWidth: '240px', margin: 0 }}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search products by code (e.g. 100), name or barcode..."
+        />
+        <div className="report-tabs" style={{ margin: 0 }}>
+          <button
+            type="button"
+            className={pricingFilter === 'ALL' ? 'chosen' : ''}
+            onClick={() => setPricingFilter('ALL')}
+            style={{ padding: '8px 14px', fontSize: '13px' }}
+          >
+            All ({items.length})
+          </button>
+          <button
+            type="button"
+            className={pricingFilter === 'WHOLESALE' ? 'chosen' : ''}
+            onClick={() => setPricingFilter('WHOLESALE')}
+            style={{
+              padding: '8px 14px',
+              fontSize: '13px',
+              color: pricingFilter === 'WHOLESALE' ? '#fff' : '#38bdf8',
+              borderColor: pricingFilter === 'WHOLESALE' ? '#0284c7' : '#0369a1',
+            }}
+          >
+            📦 Wholesale ({wholesaleCount})
+          </button>
+          <button
+            type="button"
+            className={pricingFilter === 'RETAIL_ONLY' ? 'chosen' : ''}
+            onClick={() => setPricingFilter('RETAIL_ONLY')}
+            style={{ padding: '8px 14px', fontSize: '13px' }}
+          >
+            🛍️ Retail Only ({retailOnlyCount})
+          </button>
+        </div>
+      </div>
 
       <section className="price-table">
         <div className="price-row table-head">
           <span style={{ maxWidth: '85px', flex: '0 0 85px' }}>Code</span>
           <span>Product</span>
-          <span>Price</span>
+          <span>Retail</span>
+          <span>Wholesale</span>
+          <span style={{ maxWidth: '95px', flex: '0 0 95px' }}>Min Qty</span>
           <span>Stock</span>
           <span>Action</span>
         </div>
-        {list.map(item => (
-          <div className="price-row" key={item.id}>
-            <span style={{ maxWidth: '85px', flex: '0 0 85px' }}>
-              <span className="product-code-pill">#{item.code || '---'}</span>
-            </span>
-            <span>
-              <b>{item.name}</b>
-              <small>{item.barcode ? `Barcode: ${item.barcode}` : 'No barcode'} · {item.category}</small>
-              {item.promotionEnabled && (
-                <div style={{ marginTop: '4px' }}>
-                  {isPromotionActive(item) ? (
-                    <span className="product-promo-badge active">
-                      🎁 BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
+        {list.map(item => {
+          const effectiveRetail = item.retailPrice !== undefined && item.retailPrice !== null ? item.retailPrice : item.sellingPrice
+          return (
+            <div className="price-row" key={item.id}>
+              <span style={{ maxWidth: '85px', flex: '0 0 85px' }}>
+                <span className="product-code-pill">#{item.code || '---'}</span>
+              </span>
+              <span>
+                <b>{item.name}</b>
+                <small>{item.barcode ? `Barcode: ${item.barcode}` : 'No barcode'} · {item.category}</small>
+                {item.promotionEnabled && (
+                  <div style={{ marginTop: '4px' }}>
+                    {isPromotionActive(item) ? (
+                      <span className="product-promo-badge active">
+                        🎁 BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
+                      </span>
+                    ) : (
+                      <span className="product-promo-badge inactive">
+                        ⏸️ {getPromotionStatus(item).toUpperCase()}: BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
+                      </span>
+                    )}
+                  </div>
+                )}
+              </span>
+              <span>
+                {item.discountPrice && item.discountPrice > 0 && item.discountPrice < effectiveRetail ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    <span style={{ textDecoration: 'line-through', color: '#8b9aa7', fontSize: '11px' }}>
+                      {formatMoney(effectiveRetail)}
                     </span>
-                  ) : (
-                    <span className="product-promo-badge inactive">
-                      ⏸️ {getPromotionStatus(item).toUpperCase()}: BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
-                    </span>
-                  )}
-                </div>
-              )}
-            </span>
-            <span>
-              {item.discountPrice && item.discountPrice > 0 && item.discountPrice < item.sellingPrice ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                  <span style={{ textDecoration: 'line-through', color: '#8b9aa7', fontSize: '11px' }}>
-                    {formatMoney(item.sellingPrice)}
+                    <b style={{ color: '#4ade80' }}>
+                      {formatMoney(item.discountPrice)}
+                    </b>
+                    <small style={{ color: '#22c55e', fontSize: '10px', fontWeight: 700 }}>
+                      Save {formatMoney(effectiveRetail - item.discountPrice)}
+                    </small>
+                  </div>
+                ) : (
+                  <b>{formatMoney(effectiveRetail)}</b>
+                )}
+              </span>
+              <span>
+                {item.wholesaleEnabled && item.wholesalePrice !== null && item.wholesalePrice !== undefined && Number(item.wholesalePrice) > 0 ? (
+                  <b style={{ color: '#38bdf8' }}>{formatMoney(Number(item.wholesalePrice))}</b>
+                ) : (
+                  <span style={{ color: '#64748b' }}>—</span>
+                )}
+              </span>
+              <span style={{ maxWidth: '95px', flex: '0 0 95px' }}>
+                {item.wholesaleEnabled && item.wholesaleMinQuantity ? (
+                  <span className="wholesale-min-pill" style={{ background: '#0f172a', padding: '2px 8px', borderRadius: '4px', border: '1px solid #334155', fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>
+                    {item.wholesaleMinQuantity}
                   </span>
-                  <b style={{ color: '#4ade80' }}>
-                    {formatMoney(item.discountPrice)}
-                  </b>
-                  <small style={{ color: '#22c55e', fontSize: '10px', fontWeight: 700 }}>
-                    Save {formatMoney(item.sellingPrice - item.discountPrice)}
-                  </small>
-                </div>
-              ) : (
-                <b>{formatMoney(item.sellingPrice)}</b>
-              )}
-            </span>
-            <span className={item.stockQuantity <= item.lowStockLevel ? 'low-stock' : ''}>
-              {item.stockQuantity} {item.stockQuantity <= item.lowStockLevel && 'LOW STOCK'}
-            </span>
-            <span style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button className="edit" onClick={() => setEdit(item)} title="Edit product details">
-                Edit
-              </button>
-              <button
-                className={item.active ? 'status active' : 'status'}
-                onClick={() => onToggle(item.id)}
-                title={item.active ? 'Click to set Inactive' : 'Click to set Active'}
-              >
-                {item.active ? 'Active' : 'Inactive'}
-              </button>
-              <button
-                type="button"
-                className="btn-delete-product"
-                onClick={() => setDeletingProduct(item)}
-                title={`Delete ${item.name}`}
-              >
-                Delete
-              </button>
-            </span>
-          </div>
-        ))}
+                ) : (
+                  <span style={{ color: '#64748b' }}>—</span>
+                )}
+              </span>
+              <span className={item.stockQuantity <= item.lowStockLevel ? 'low-stock' : ''}>
+                {item.stockQuantity} {item.stockQuantity <= item.lowStockLevel && 'LOW STOCK'}
+              </span>
+              <span style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button className="edit" onClick={() => setEdit(item)} title="Edit product details">
+                  Edit
+                </button>
+                <button
+                  className={item.active ? 'status active' : 'status'}
+                  onClick={() => onToggle(item.id)}
+                  title={item.active ? 'Click to set Inactive' : 'Click to set Active'}
+                >
+                  {item.active ? 'Active' : 'Inactive'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-delete-product"
+                  onClick={() => setDeletingProduct(item)}
+                  title={`Delete ${item.name}`}
+                >
+                  Delete
+                </button>
+              </span>
+            </div>
+          )
+        })}
       </section>
 
       {edit && (
@@ -271,13 +343,25 @@ function Editor({
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    const retPrice = Number(product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : product.sellingPrice)
     if (
       !product.name.trim() ||
-      product.sellingPrice < 0 ||
+      retPrice < 0 ||
       product.costPrice < 0 ||
       product.stockQuantity < 0
     ) {
       return setError('Complete valid product details.')
+    }
+
+    if (product.wholesaleEnabled) {
+      const wsPrice = Number(product.wholesalePrice)
+      const wsMin = Number(product.wholesaleMinQuantity)
+      if (isNaN(wsPrice) || wsPrice <= 0) {
+        return setError('Wholesale price must be greater than 0.')
+      }
+      if (isNaN(wsMin) || wsMin <= 0) {
+        return setError('Wholesale minimum quantity must be greater than 0.')
+      }
     }
 
     const codeVal = (product.code || '').trim() || getNextGroceryCode(existing)
@@ -304,8 +388,8 @@ function Editor({
     if (discNum !== null && (isNaN(discNum) || discNum < 0)) {
       return setError('Discount price must be a valid positive number.')
     }
-    if (discNum !== null && discNum >= Number(product.sellingPrice)) {
-      return setError('Discount price must be less than the regular selling price.')
+    if (discNum !== null && discNum >= retPrice) {
+      return setError('Discount price must be less than the regular retail price.')
     }
 
     if (product.promotionEnabled) {
@@ -329,7 +413,11 @@ function Editor({
         category: product.category,
         barcode: product.barcode,
         costPrice: Number(product.costPrice),
-        sellingPrice: Number(product.sellingPrice),
+        sellingPrice: retPrice,
+        retailPrice: retPrice,
+        wholesaleEnabled: Boolean(product.wholesaleEnabled),
+        wholesalePrice: product.wholesaleEnabled && product.wholesalePrice != null ? Number(product.wholesalePrice) : null,
+        wholesaleMinQuantity: product.wholesaleEnabled && product.wholesaleMinQuantity != null ? Math.max(1, Math.floor(Number(product.wholesaleMinQuantity))) : null,
         discountPrice: discNum,
         stockQuantity: Number(product.stockQuantity),
         lowStockLevel: Number(product.lowStockLevel),
@@ -401,7 +489,103 @@ function Editor({
           </label>
           {field('barcode', 'BARCODE (OPTIONAL)')}
           {field('costPrice', 'COST PRICE (RS.)', 'number')}
-          {field('sellingPrice', 'SELLING PRICE (REGULAR RS.)', 'number')}
+          <label>
+            RETAIL PRICE (RS.)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : (product.sellingPrice || '')}
+              onChange={e => {
+                const val = e.target.value === '' ? 0 : Number(e.target.value)
+                setProduct({
+                  ...product,
+                  retailPrice: val,
+                  sellingPrice: val,
+                })
+              }}
+              placeholder="e.g. 100"
+              required
+            />
+          </label>
+
+          {/* WHOLESALE PRICING CONFIGURATION */}
+          <div className={`promo-config-card ${product.wholesaleEnabled ? 'enabled' : ''}`} style={{ gridColumn: '1 / -1' }}>
+            <div className="promo-card-header">
+              <div className="promo-header-info">
+                <span className="promo-badge-tag" style={{ background: '#0284c7', color: '#fff' }}>WHOLESALE PRICING</span>
+                <div className="promo-card-title">📦 Wholesale Selling Rules</div>
+                <p className="promo-card-desc">Configure wholesale unit price and minimum quantity threshold for bulk sales</p>
+              </div>
+              <label className="promo-switch-label">
+                <input
+                  type="checkbox"
+                  checked={Boolean(product.wholesaleEnabled)}
+                  onChange={e =>
+                    setProduct({
+                      ...product,
+                      wholesaleEnabled: e.target.checked,
+                      wholesalePrice: e.target.checked ? (product.wholesalePrice || null) : product.wholesalePrice,
+                      wholesaleMinQuantity: e.target.checked ? (product.wholesaleMinQuantity || 12) : product.wholesaleMinQuantity,
+                    })
+                  }
+                />
+                <span>{product.wholesaleEnabled ? 'Wholesale ON' : 'Wholesale OFF'}</span>
+              </label>
+            </div>
+
+            {product.wholesaleEnabled && (
+              <div className="promo-card-body">
+                <div className="promo-input-row">
+                  <label>
+                    WHOLESALE PRICE (RS.)
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={product.wholesalePrice ?? ''}
+                      onChange={e =>
+                        setProduct({
+                          ...product,
+                          wholesalePrice: e.target.value === '' ? null : Number(e.target.value),
+                        })
+                      }
+                      placeholder="e.g. 85"
+                      required={Boolean(product.wholesaleEnabled)}
+                    />
+                  </label>
+                  <label>
+                    WHOLESALE MINIMUM QUANTITY
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={product.wholesaleMinQuantity ?? ''}
+                      onChange={e =>
+                        setProduct({
+                          ...product,
+                          wholesaleMinQuantity: e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10)),
+                        })
+                      }
+                      placeholder="e.g. 12"
+                      required={Boolean(product.wholesaleEnabled)}
+                    />
+                  </label>
+                </div>
+
+                {product.wholesalePrice !== null &&
+                  product.wholesalePrice !== undefined &&
+                  Number(product.wholesalePrice) > 0 &&
+                  Number(product.retailPrice ?? product.sellingPrice) > 0 &&
+                  Number(product.wholesalePrice) >= Number(product.retailPrice ?? product.sellingPrice) && (
+                    <div style={{ background: '#451a03', border: '1px solid #b45309', padding: '10px 14px', borderRadius: '6px', color: '#fef08a', fontSize: '12px', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>⚠️</span>
+                      <span>Wholesale price is not lower than retail price. Please confirm.</span>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
           <label>
             DISCOUNT PRICE (OPTIONAL RS.)
             <input

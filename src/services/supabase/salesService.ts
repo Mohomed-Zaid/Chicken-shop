@@ -48,6 +48,8 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         promotion_type?: string
         promotion_buy_quantity?: number | string
         promotion_free_quantity?: number | string
+        selling_mode?: string
+        price_type?: string
       }>
 
       const items: SaleItem[] = rawItems.map(si => {
@@ -71,6 +73,8 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
           promotionType: si.promotion_type || null,
           promotionBuyQuantity: si.promotion_buy_quantity != null ? Number(si.promotion_buy_quantity) : null,
           promotionFreeQuantity: si.promotion_free_quantity != null ? Number(si.promotion_free_quantity) : null,
+          sellingMode: (si.selling_mode as 'RETAIL' | 'WHOLESALE') || (row.selling_mode as 'RETAIL' | 'WHOLESALE') || 'RETAIL',
+          priceType: (si.price_type as 'RETAIL' | 'WHOLESALE') || 'RETAIL',
         }
       })
 
@@ -97,6 +101,7 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         customerId: row.customer_id || undefined,
         customerName: row.customer_name || 'Walk-in Customer',
         status: (row.status as 'completed' | 'cancelled') || 'completed',
+        sellingMode: (row.selling_mode as 'RETAIL' | 'WHOLESALE') || 'RETAIL',
       }
     })
   } catch (err) {
@@ -214,6 +219,7 @@ export const saveSale = async (sale: Sale) => {
       amount_received: sale.amountReceived,
       change: sale.change,
       status: sale.status,
+      selling_mode: sale.sellingMode || 'RETAIL',
     })
     .select()
     .single()
@@ -244,6 +250,8 @@ export const saveSale = async (sale: Sale) => {
       promotion_type: item.promotionType || null,
       promotion_buy_quantity: item.promotionBuyQuantity ?? null,
       promotion_free_quantity: item.promotionFreeQuantity ?? null,
+      selling_mode: item.sellingMode || sale.sellingMode || 'RETAIL',
+      price_type: item.priceType || 'RETAIL',
     }))
   )
   return sale
@@ -273,6 +281,7 @@ export const completeSaleAtomically = async (
       amount_received: currentSale.amountReceived,
       change: currentSale.change,
       status: currentSale.status,
+      selling_mode: currentSale.sellingMode || 'RETAIL',
       items: currentSale.items.map((item, index) => ({
         id: `${currentSale.id}-item-${index}-${item.productId || 'item'}`,
         product_id: item.productId,
@@ -291,6 +300,8 @@ export const completeSaleAtomically = async (
         price_per_kg: item.pricePerKg,
         cost_price: item.costPrice,
         total: item.total,
+        selling_mode: item.sellingMode || currentSale.sellingMode || 'RETAIL',
+        price_type: item.priceType || 'RETAIL',
       })),
     }
 

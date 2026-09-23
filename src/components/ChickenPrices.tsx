@@ -6,13 +6,14 @@ type EditorProps = {
   item?: ChickenItem
   existingItems: ChickenItem[]
   onClose: () => void
-  onSave: (code: string, name: string, price: number) => void
+  onSave: (code: string, name: string, price: number, wholesalePrice?: number | null) => void
 }
 
 function ItemEditor({ item, existingItems, onClose, onSave }: EditorProps) {
   const [code, setCode] = useState(item?.code ?? '')
   const [name, setName] = useState(item?.name ?? '')
   const [price, setPrice] = useState(item ? String(item.pricePerKg) : '')
+  const [wholesalePrice, setWholesalePrice] = useState(item && item.wholesalePricePerKg ? String(item.wholesalePricePerKg) : '')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -24,7 +25,7 @@ function ItemEditor({ item, existingItems, onClose, onSave }: EditorProps) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const normCode = normalizeChickenCode(code)
-    if (!normCode) return setError('Enter a chicken code (e.g. CH001).')
+    if (!normCode) return setError('Enter a chicken code (e.g. 001, 1).')
 
     // Validate uniqueness
     const duplicate = existingItems.some(
@@ -39,10 +40,15 @@ function ItemEditor({ item, existingItems, onClose, onSave }: EditorProps) {
 
     const value = Number(price)
     if (!Number.isFinite(value) || value <= 0 || !/^\d+(\.\d+)?$/.test(price.trim())) {
-      return setError('Enter a valid price greater than 0.')
+      return setError('Enter a valid retail price greater than 0.')
     }
 
-    onSave(normCode, trimmedName, value)
+    const wsVal = wholesalePrice.trim() ? Number(wholesalePrice) : null
+    if (wsVal !== null && (!Number.isFinite(wsVal) || wsVal <= 0)) {
+      return setError('Wholesale price must be greater than 0 if provided.')
+    }
+
+    onSave(normCode, trimmedName, value, wsVal)
   }
 
   return (
@@ -80,7 +86,7 @@ function ItemEditor({ item, existingItems, onClose, onSave }: EditorProps) {
             />
           </label>
           <label>
-            PRICE PER KG (RS.)
+            RETAIL PRICE PER KG (RS.)
             <input
               autoFocus={Boolean(item)}
               value={price}
@@ -89,9 +95,27 @@ function ItemEditor({ item, existingItems, onClose, onSave }: EditorProps) {
                 setError('')
               }}
               inputMode="decimal"
-              placeholder="e.g. 1200"
+              placeholder="e.g. 1000"
+              required
             />
           </label>
+          <label>
+            WHOLESALE PRICE PER KG (OPTIONAL RS.)
+            <input
+              value={wholesalePrice}
+              onChange={e => {
+                setWholesalePrice(e.target.value)
+                setError('')
+              }}
+              inputMode="decimal"
+              placeholder="e.g. 920"
+            />
+          </label>
+          {wholesalePrice && Number(wholesalePrice) > 0 && Number(price) > 0 && Number(wholesalePrice) >= Number(price) && (
+            <p style={{ color: '#facc15', fontSize: '12px', marginTop: '2px' }}>
+              ⚠️ Wholesale price is not lower than retail price.
+            </p>
+          )}
           {error && <p className="validation">{error}</p>}
         </div>
         <footer>
@@ -114,8 +138,8 @@ export function DailyChickenPrices({
 }: {
   items: ChickenItem[]
   history: PriceHistoryEntry[]
-  onUpdatePrice: (id: string, code: string, name: string, price: number) => void
-  onAdd: (code: string, name: string, price: number) => void
+  onUpdatePrice: (id: string, code: string, name: string, price: number, wholesalePrice?: number | null) => void
+  onAdd: (code: string, name: string, price: number, wholesalePrice?: number | null) => void
   onToggle: (id: string) => void
 }) {
   const [query, setQuery] = useState('')
@@ -141,7 +165,7 @@ export function DailyChickenPrices({
         <div>
           <small>PRICE MANAGEMENT</small>
           <h1>Daily Chicken Prices</h1>
-          <p>Update today’s rate per KG and cut codes. Cashiers will see saved prices immediately.</p>
+          <p>Update today’s retail and wholesale rate per KG. Cashiers will see saved prices immediately.</p>
         </div>
         <button className="primary" onClick={() => setAdding(true)}>
           + Add Chicken Item
@@ -199,11 +223,12 @@ export function DailyChickenPrices({
 
       <section className="price-table">
         <div className="price-row table-head">
-          <span>Code</span>
+          <span style={{ maxWidth: '85px', flex: '0 0 85px' }}>Code</span>
           <span>Chicken Cut</span>
-          <span>Price / KG</span>
-          <span>Status</span>
-          <span>Action</span>
+          <span>Retail / KG</span>
+          <span>Wholesale / KG</span>
+          <span style={{ maxWidth: '100px', flex: '0 0 100px' }}>Status</span>
+          <span style={{ maxWidth: '90px', flex: '0 0 90px' }}>Action</span>
         </div>
         {filteredItems.length === 0 ? (
           <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>
@@ -225,7 +250,7 @@ export function DailyChickenPrices({
         ) : (
           filteredItems.map(item => (
             <div className="price-row" key={item.id}>
-              <span>
+              <span style={{ maxWidth: '85px', flex: '0 0 85px' }}>
                 <b className="font-mono">{item.code || '—'}</b>
               </span>
               <span>
@@ -236,6 +261,13 @@ export function DailyChickenPrices({
                 <b>{formatMoney(item.pricePerKg)}</b>
               </span>
               <span>
+                {item.wholesalePricePerKg && item.wholesalePricePerKg > 0 ? (
+                  <b style={{ color: '#38bdf8' }}>{formatMoney(item.wholesalePricePerKg)}</b>
+                ) : (
+                  <span style={{ color: '#64748b' }}>—</span>
+                )}
+              </span>
+              <span style={{ maxWidth: '100px', flex: '0 0 100px' }}>
                 <button
                   className={item.active ? 'status active' : 'status'}
                   onClick={() => onToggle(item.id)}
@@ -243,7 +275,7 @@ export function DailyChickenPrices({
                   {item.active ? 'Active' : 'Inactive'}
                 </button>
               </span>
-              <span>
+              <span style={{ maxWidth: '90px', flex: '0 0 90px' }}>
                 <button className="edit" onClick={() => setEditing(item)}>
                   Edit
                 </button>
@@ -285,8 +317,8 @@ export function DailyChickenPrices({
           item={editing}
           existingItems={items}
           onClose={() => setEditing(undefined)}
-          onSave={(code, name, price) => {
-            onUpdatePrice(editing.id, code, name, price)
+          onSave={(code, name, price, wholesalePrice) => {
+            onUpdatePrice(editing.id, code, name, price, wholesalePrice)
             setEditing(undefined)
           }}
         />
@@ -296,8 +328,8 @@ export function DailyChickenPrices({
         <ItemEditor
           existingItems={items}
           onClose={() => setAdding(false)}
-          onSave={(code, name, price) => {
-            onAdd(code, name, price)
+          onSave={(code, name, price, wholesalePrice) => {
+            onAdd(code, name, price, wholesalePrice)
             setAdding(false)
           }}
         />
@@ -305,3 +337,4 @@ export function DailyChickenPrices({
     </section>
   )
 }
+

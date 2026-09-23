@@ -6,6 +6,10 @@ export interface GroceryProduct {
   barcode: string
   costPrice: number
   sellingPrice: number
+  retailPrice?: number | null
+  wholesalePrice?: number | null
+  wholesaleEnabled?: boolean | null
+  wholesaleMinQuantity?: number | null
   discountPrice?: number | null
   stockQuantity: number
   lowStockLevel: number
@@ -51,6 +55,10 @@ export const demo: GroceryProduct[] = [
   barcode: barcode as string,
   costPrice: costPrice as number,
   sellingPrice: sellingPrice as number,
+  retailPrice: sellingPrice as number,
+  wholesaleEnabled: false,
+  wholesalePrice: null,
+  wholesaleMinQuantity: null,
   stockQuantity: stockQuantity as number,
   lowStockLevel: lowStockLevel as number,
   unit: 'Piece',
@@ -146,7 +154,14 @@ export const groceryStore = {
     try {
       const raw = localStorage.getItem(key)
       const parsed: GroceryProduct[] = raw ? JSON.parse(raw) : demo
-      const withCodes = ensureGroceryCodes(parsed)
+      const normalized: GroceryProduct[] = parsed.map(p => ({
+        ...p,
+        retailPrice: p.retailPrice !== undefined && p.retailPrice !== null ? Number(p.retailPrice) : Number(p.sellingPrice || 0),
+        wholesaleEnabled: Boolean(p.wholesaleEnabled),
+        wholesalePrice: p.wholesalePrice !== undefined && p.wholesalePrice !== null ? Number(p.wholesalePrice) : null,
+        wholesaleMinQuantity: p.wholesaleMinQuantity !== undefined && p.wholesaleMinQuantity !== null ? Number(p.wholesaleMinQuantity) : null,
+      }))
+      const withCodes = ensureGroceryCodes(normalized)
       if (JSON.stringify(parsed) !== JSON.stringify(withCodes)) {
         try {
           localStorage.setItem(key, JSON.stringify(withCodes))

@@ -215,6 +215,12 @@ export function Receipt({ sale }: { sale: Sale }) {
             <span className="meta-label">දිනය:</span>
             <span className="meta-value">{displayDate(sale.date)} {sale.time}</span>
           </div>
+          {sale.sellingMode === 'WHOLESALE' && (
+            <div className="thermal-meta-row">
+              <span className="meta-label">විකුණුම් මාදිලිය:</span>
+              <span className="meta-value bold-invoice">තොග විකිණුම් (WHOLESALE)</span>
+            </div>
+          )}
           {bSettings.showCashier && sale.cashier && (
             <div className="thermal-meta-row">
               <span className="meta-label">අයකැමි:</span>
@@ -240,6 +246,7 @@ export function Receipt({ sale }: { sale: Sale }) {
           <div className="thermal-items-list">
             {sale.items.map((item, index) => {
               const displayName = item.code ? `${item.code} - ${item.productName}` : item.productName
+              const isWholesale = item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE'
               const calcText =
                 item.productType === 'chicken'
                   ? `${weightLabel(item.weightGrams || 0)} × ${formatMoney(item.pricePerKg || 0)}`
@@ -250,9 +257,19 @@ export function Receipt({ sale }: { sale: Sale }) {
 
               return (
                 <div className="thermal-item-row" key={`${item.productId}-${index}`}>
-                  <div className="item-name-line">{displayName}</div>
+                  <div className="item-name-line">
+                    <span>{displayName}</span>
+                    {isWholesale && (
+                      <span style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, marginLeft: '6px', border: '1px solid #000', padding: '0 4px', borderRadius: '2px', verticalAlign: 'middle' }}>
+                        තොග මිල (WHOLESALE)
+                      </span>
+                    )}
+                  </div>
                   <div className="item-sub-line">
-                    <span className="item-rate">{calcText}</span>
+                    <span className="item-rate">
+                      {calcText}
+                      {isWholesale && <small style={{ fontWeight: 800, marginLeft: '3px' }}>[WHOLESALE]</small>}
+                    </span>
                     <span className="item-total">{formatMoney(item.total)}</span>
                   </div>
                   {hasFree && (

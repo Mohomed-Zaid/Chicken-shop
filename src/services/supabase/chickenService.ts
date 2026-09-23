@@ -6,6 +6,7 @@ export type ChickenCutRow = {
   code?: string
   name: string
   price_per_kg: number
+  wholesale_price_per_kg?: number | null
   active: boolean
   created_at?: string
   updated_at?: string
@@ -25,6 +26,7 @@ export const rowToChickenItem = (row: ChickenCutRow): ChickenItem => ({
   name: row.name,
   cut: row.name,
   pricePerKg: Number(row.price_per_kg || 0),
+  wholesalePricePerKg: row.wholesale_price_per_kg != null ? Number(row.wholesale_price_per_kg) : null,
   active: row.active ?? true,
   createdAt: row.created_at || new Date().toISOString(),
   updatedAt: row.updated_at || new Date().toISOString(),
@@ -35,6 +37,7 @@ export const chickenItemToRow = (item: ChickenItem): ChickenCutRow => ({
   code: item.code,
   name: item.name,
   price_per_kg: item.pricePerKg,
+  wholesale_price_per_kg: item.wholesalePricePerKg ?? null,
   active: item.active,
   created_at: item.createdAt,
   updated_at: item.updatedAt,

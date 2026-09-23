@@ -1,5 +1,13 @@
 import { useEffect, useState, useMemo, useRef, type FormEvent } from 'react'
-import { calculateChickenPrice, formatMoney, findChickenByCode, type ChickenCartItem, type ChickenItem } from '../data/chicken'
+import {
+  calculateChickenPrice,
+  formatMoney,
+  findChickenByCode,
+  parseWeightInGrams,
+  formatWeightDisplay,
+  type ChickenCartItem,
+  type ChickenItem,
+} from '../data/chicken'
 import { groceryStore, findGroceryByCode, type GroceryProduct } from '../data/grocery'
 import { salesStore, toLocalDateString, type PaymentMethod, type Sale, type SaleItem } from '../data/records'
 import { movementStore } from '../data/purchases'
@@ -13,12 +21,22 @@ import { heldOrdersStore, generateHeldOrderId, type HeldOrder } from '../data/he
 import { calculatePromotion, isPromotionActive, formatPromotionBadge } from '../services/promotionService'
 import { customerStore, getCustomerOutstanding, type Customer } from '../data/customers'
 import { syncCustomerToSupabase } from '../services/supabase/customerService'
+import {
+  getProductSellingPrice,
+  getProductRetailPrice,
+  getProductWholesalePrice,
+  type SellingMode,
+  type PriceType,
+} from '../services/pricingService'
 
 type GroceryCartItem = {
   id: string
   kind: 'grocery'
   product: GroceryProduct
   quantity: number // Customer paid quantity
+  unitPrice: number
+  sellingMode: SellingMode
+  priceType: PriceType
   paidQuantity: number
   freeQuantity: number
   totalQuantity: number
@@ -28,27 +46,6 @@ type GroceryCartItem = {
 type Cart = ChickenCartItem | GroceryCartItem
 
 const quickWeights = [250, 500, 750, 1000, 1500, 2000]
-
-const parseWeightInGrams = (value: string): number | null => {
-  const trimmed = value.trim().toLowerCase()
-  if (!trimmed) return null
-  if (trimmed.endsWith('kg')) {
-    const num = parseFloat(trimmed.replace('kg', '').trim())
-    if (Number.isFinite(num) && num > 0) return Math.round(num * 1000)
-    return null
-  }
-  if (trimmed.endsWith('g')) {
-    const num = parseFloat(trimmed.replace('g', '').trim())
-    if (Number.isFinite(num) && num > 0) return Math.round(num)
-    return null
-  }
-  const numeric = Number(trimmed)
-  if (!Number.isFinite(numeric) || numeric <= 0) return null
-  if (trimmed.includes('.') && numeric < 50) {
-    return Math.round(numeric * 1000)
-  }
-  return Math.round(numeric)
-}
 
 function CartItemQtyInput({
   quantity,
@@ -172,14 +169,17 @@ function PaymentModal({
   onSelectCustomer,
   onCancel,
   onComplete,
+  sellingMode = 'RETAIL',
 }: {
   total: number
   selectedCustomer: Customer | null
   onSelectCustomer: (c: Customer | null) => void
   onCancel: () => void
   onComplete: (method: PaymentMethod, received: number, customer?: Customer | null) => void
+  sellingMode?: SellingMode
 }) {
   const [method, setMethod] = useState<PaymentMethod>('Cash')
+  const [cashReceivedStr, setCashReceivedStr] = useState<string>(() => String(total))
   const [error, setError] = useState('')
   const [processing, setProcessing] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -188,6 +188,10 @@ function PaymentModal({
   const [customerList, setCustomerList] = useState<Customer[]>(() =>
     customerStore.getCustomers().filter(c => c.active)
   )
+  const cashInputRef = useRef<HTMLInputElement>(null)
+
+  const cashReceivedNum = parseFloat(cashReceivedStr) || 0
+  const cashChange = cashReceivedNum >= total ? cashReceivedNum - total : 0
 
   const reloadCustomers = () => {
     setCustomerList(customerStore.getCustomers().filter(c => c.active))
@@ -227,6 +231,20 @@ function PaymentModal({
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (processing) return
+
+    if (method === 'Cash') {
+      const received = parseFloat(cashReceivedStr)
+      if (!Number.isFinite(received) || received < total) {
+        setError(`Amount received (${formatMoney(received || 0)}) cannot be less than total (${formatMoney(total)}).`)
+        cashInputRef.current?.focus()
+        cashInputRef.current?.select()
+        return
+      }
+      setProcessing(true)
+      setError('')
+      onComplete('Cash', received, selectedCustomer)
+      return
+    }
 
     if (method === 'Credit') {
       if (!selectedCustomer) {
@@ -272,6 +290,10 @@ function PaymentModal({
           e.preventDefault()
           setMethod('Cash')
           setError('')
+          setTimeout(() => {
+            cashInputRef.current?.focus()
+            cashInputRef.current?.select()
+          }, 50)
         } else if (e.key === 'd' || e.key === 'D' || e.key === '2') {
           e.preventDefault()
           setMethod('Card')
@@ -289,7 +311,7 @@ function PaymentModal({
 
   return (
     <div className="shade">
-      <form className="dialog pos-payment-modal" onSubmit={submit} style={{ maxWidth: '500px' }}>
+      <form className="dialog pos-payment-modal" onSubmit={submit} style={{ maxWidth: '520px' }}>
         <header>
           <div>
             <small>CHECKOUT & BILLING</small>
@@ -299,6 +321,33 @@ function PaymentModal({
         </header>
 
         <div className="editor-body">
+          {sellingMode === 'WHOLESALE' && (
+            <div
+              style={{
+                background: 'linear-gradient(90deg, #0369a1, #0284c7)',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+                letterSpacing: '0.4px',
+                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '15px' }}>📦</span>
+                <span>WHOLESALE INVOICE CHECKOUT</span>
+              </span>
+              <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: '4px' }}>
+                Trade Rates
+              </span>
+            </div>
+          )}
+
           <div className="payment-total-banner">
             <span>TOTAL AMOUNT DUE</span>
             <b className="due-amount">{formatMoney(total)}</b>
@@ -313,10 +362,15 @@ function PaymentModal({
                 onClick={() => {
                   setMethod('Cash')
                   setError('')
+                  setTimeout(() => {
+                    cashInputRef.current?.focus()
+                    cashInputRef.current?.select()
+                  }, 50)
                 }}
                 disabled={processing}
+                style={{ minHeight: '44px' }}
               >
-                <span>💵 Cash</span>
+                <span>💵 Cash (1 / C)</span>
               </button>
               <button
                 type="button"
@@ -326,8 +380,9 @@ function PaymentModal({
                   setError('')
                 }}
                 disabled={processing}
+                style={{ minHeight: '44px' }}
               >
-                <span>💳 Card</span>
+                <span>💳 Card (2 / D)</span>
               </button>
               <button
                 type="button"
@@ -338,12 +393,13 @@ function PaymentModal({
                 }}
                 disabled={processing}
                 style={{
+                  minHeight: '44px',
                   border: method === 'Credit' ? '2px solid #f3b625' : '1px solid #364858',
                   background: method === 'Credit' ? '#27384a' : '#1b2733',
                 }}
               >
                 <span style={{ color: method === 'Credit' ? '#f3b625' : '#ffffff', fontWeight: 800 }}>
-                  🏷️ CREDIT / PAY LATER
+                  🏷️ CREDIT / PAY LATER (3)
                 </span>
               </button>
               <button
@@ -354,16 +410,91 @@ function PaymentModal({
                   setError('')
                 }}
                 disabled={processing}
+                style={{ minHeight: '44px' }}
               >
-                <span>📝 Other</span>
+                <span>📝 Other (4 / O)</span>
               </button>
             </div>
           </div>
 
           {method === 'Cash' && (
-            <div style={{ textAlign: 'center', padding: '14px', background: 'rgba(232, 170, 21, 0.08)', borderRadius: '8px', border: '1px solid rgba(232, 170, 21, 0.25)', marginTop: '12px' }}>
-              <span style={{ fontSize: '12px', color: '#9bb1c4', display: 'block', marginBottom: '4px' }}>EXACT CASH PAYMENT</span>
-              <b style={{ fontSize: '24px', color: '#f3b625', fontWeight: 900 }}>{formatMoney(total)}</b>
+            <div style={{ marginTop: '14px', background: '#0f172a', padding: '14px 16px', borderRadius: '8px', border: '1px solid #334155' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', alignItems: 'center' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                    AMOUNT RECEIVED (RS.)
+                  </label>
+                  <input
+                    ref={cashInputRef}
+                    type="number"
+                    step="any"
+                    min={0}
+                    autoFocus
+                    value={cashReceivedStr}
+                    onChange={e => {
+                      setCashReceivedStr(e.target.value)
+                      setError('')
+                    }}
+                    onFocus={e => e.target.select()}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '20px',
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      background: '#1e293b',
+                      border: '2px solid #38bdf8',
+                      borderRadius: '6px',
+                    }}
+                    placeholder="Enter cash..."
+                  />
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                    CHANGE
+                  </span>
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      fontSize: '20px',
+                      fontWeight: 800,
+                      color: cashReceivedNum >= total ? '#10b981' : '#f87171',
+                      background: '#1e293b',
+                      borderRadius: '6px',
+                      border: '1px solid #334155',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {cashReceivedNum >= total ? formatMoney(cashChange) : 'Short'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fast Cash Preset Buttons */}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setCashReceivedStr(String(total))}
+                  style={{ flex: 1, minHeight: '38px', fontSize: '12px', fontWeight: 700, background: '#1e293b', border: '1px solid #475569', color: '#f8fafc', borderRadius: '5px', cursor: 'pointer' }}
+                >
+                  Exact ({formatMoney(total)})
+                </button>
+                {[500, 1000, 2000, 5000].map(amt => {
+                  if (amt < total && amt * 2 < total) return null
+                  return (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCashReceivedStr(String(amt))}
+                      style={{ minHeight: '38px', padding: '0 12px', fontSize: '12px', fontWeight: 700, background: '#1e293b', border: '1px solid #0284c7', color: '#38bdf8', borderRadius: '5px', cursor: 'pointer' }}
+                    >
+                      Rs.{amt}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -1004,6 +1135,7 @@ export function PosPayment({
 }) {
   const { profile } = useAuth()
   const [tab, setTab] = useState<'Chicken' | 'Grocery'>('Chicken')
+  const [sellingMode, setSellingMode] = useState<SellingMode>('RETAIL')
   const [groceryCategory, setGroceryCategory] = useState<string>('All')
   const [selected, setSelected] = useState<ChickenItem | null>(null)
   const [grams, setGrams] = useState('')
@@ -1121,7 +1253,7 @@ export function PosPayment({
     return () => window.removeEventListener('keydown', handleEscape)
   }, [selected])
 
-  const addChicken = (weightGrams: number) => {
+  const addChicken = (weightGrams: number, forcePriceType?: PriceType) => {
     if (!selected) return
     const parsedWeight = Number(weightGrams)
     if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
@@ -1129,7 +1261,17 @@ export function PosPayment({
       return
     }
 
-    const total = calculateChickenPrice(parsedWeight, selected.pricePerKg)
+    const isWholesale =
+      forcePriceType === 'WHOLESALE' ||
+      (forcePriceType !== 'RETAIL' &&
+        sellingMode === 'WHOLESALE' &&
+        selected.wholesalePricePerKg !== undefined &&
+        selected.wholesalePricePerKg !== null &&
+        selected.wholesalePricePerKg > 0)
+    const effectivePricePerKg = isWholesale ? selected.wholesalePricePerKg! : selected.pricePerKg
+    const priceType: PriceType = isWholesale ? 'WHOLESALE' : 'RETAIL'
+    const total = calculateChickenPrice(parsedWeight, effectivePricePerKg)
+
     setCart(current => [
       ...current,
       {
@@ -1141,9 +1283,11 @@ export function PosPayment({
         productName: selected.name,
         code: selected.code,
         weightGrams: parsedWeight,
-        pricePerKg: selected.pricePerKg,
+        pricePerKg: effectivePricePerKg,
         unitPrice: total,
         total,
+        sellingMode: isWholesale ? 'WHOLESALE' : 'RETAIL',
+        priceType,
       },
     ])
 
@@ -1152,28 +1296,131 @@ export function PosPayment({
     setNotice('')
   }
 
-  const addGrocery = (product: GroceryProduct) => {
+  const resolveItemPricing = (
+    product: GroceryProduct,
+    quantity: number,
+    mode: SellingMode,
+    forcePriceType?: PriceType
+  ) => {
+    if (forcePriceType === 'RETAIL') {
+      const unitPrice = getProductRetailPrice(product)
+      const promo = calculatePromotion(quantity, product)
+      return {
+        unitPrice,
+        sellingMode: mode,
+        priceType: 'RETAIL' as const,
+        total: promo.paidQuantity * unitPrice,
+        promo,
+      }
+    }
+
+    if (forcePriceType === 'WHOLESALE') {
+      const unitPrice =
+        product.wholesalePrice && Number(product.wholesalePrice) > 0
+          ? Number(product.wholesalePrice)
+          : getProductRetailPrice(product)
+      return {
+        unitPrice,
+        sellingMode: mode,
+        priceType: 'WHOLESALE' as const,
+        total: quantity * unitPrice,
+        promo: { paidQuantity: quantity, freeQuantity: 0, totalQuantity: quantity, promotionApplied: false },
+      }
+    }
+
+    const pricing = getProductSellingPrice(product, quantity, mode)
+    if (pricing.priceType === 'WHOLESALE') {
+      return {
+        unitPrice: pricing.unitPrice,
+        sellingMode: mode,
+        priceType: 'WHOLESALE' as const,
+        total: quantity * pricing.unitPrice,
+        promo: { paidQuantity: quantity, freeQuantity: 0, totalQuantity: quantity, promotionApplied: false },
+      }
+    } else {
+      const promo = calculatePromotion(quantity, product)
+      return {
+        unitPrice: pricing.unitPrice,
+        sellingMode: mode,
+        priceType: 'RETAIL' as const,
+        total: promo.paidQuantity * pricing.unitPrice,
+        promo,
+      }
+    }
+  }
+
+  const handleSwitchSellingMode = (newMode: SellingMode) => {
+    setSellingMode(newMode)
+    setCart(current =>
+      current.map(item => {
+        if (item.kind === 'chicken') {
+          const isWs =
+            newMode === 'WHOLESALE' &&
+            item.chicken?.wholesalePricePerKg !== undefined &&
+            item.chicken.wholesalePricePerKg !== null &&
+            item.chicken.wholesalePricePerKg > 0
+          const effPricePerKg = isWs
+            ? item.chicken.wholesalePricePerKg!
+            : (item.chicken?.pricePerKg || item.pricePerKg)
+          const pType: PriceType = isWs ? 'WHOLESALE' : 'RETAIL'
+          const cTotal = calculateChickenPrice(item.weightGrams, effPricePerKg)
+          return {
+            ...item,
+            pricePerKg: effPricePerKg,
+            unitPrice: cTotal,
+            total: cTotal,
+            sellingMode: newMode,
+            priceType: pType,
+          }
+        }
+        const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+          item.product,
+          item.quantity,
+          newMode
+        )
+        return {
+          ...item,
+          unitPrice,
+          sellingMode: newMode,
+          priceType,
+          paidQuantity: promo.paidQuantity,
+          freeQuantity: promo.freeQuantity,
+          totalQuantity: promo.totalQuantity,
+          promotionApplied: promo.promotionApplied,
+          total: itemTotal,
+        }
+      })
+    )
+    setNotice(`Switched to ${newMode === 'WHOLESALE' ? '📦 Wholesale' : '🛍️ Retail'} Mode`)
+    setTimeout(() => setNotice(''), 2000)
+  }
+
+  const addGrocery = (
+    product: GroceryProduct,
+    forcePriceType?: PriceType,
+    overrideQty?: number
+  ) => {
     if (product.stockQuantity <= 0) return setNotice(`Out of stock: ${product.name}.`)
     const found = cart.find(item => item.kind === 'grocery' && item.product.id === product.id) as
       | GroceryCartItem
       | undefined
 
-    const nextPaid = found ? found.quantity + 1 : 1
-    const promo = calculatePromotion(nextPaid, product)
-    const reqTotal = promo.totalQuantity
+    const nextPaid = overrideQty !== undefined ? overrideQty : (found ? found.quantity + 1 : 1)
 
+    const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+      product,
+      nextPaid,
+      sellingMode,
+      forcePriceType
+    )
+
+    const reqTotal = promo.totalQuantity
     if (reqTotal > product.stockQuantity) {
       if (promo.promotionApplied) {
         return setNotice(`Insufficient stock for promotion. Available: ${product.stockQuantity}, Required: ${reqTotal}`)
       }
       return setNotice(`Insufficient stock for ${product.name}. Available: ${product.stockQuantity}`)
     }
-
-    const hasDiscount = Boolean(
-      product.discountPrice && product.discountPrice > 0 && product.discountPrice < product.sellingPrice
-    )
-    const unitPrice = hasDiscount ? product.discountPrice! : product.sellingPrice
-    const itemTotal = nextPaid * unitPrice
 
     setCart(current =>
       found
@@ -1182,6 +1429,9 @@ export function PosPayment({
             ? {
               ...found,
               quantity: nextPaid,
+              unitPrice,
+              sellingMode,
+              priceType,
               paidQuantity: promo.paidQuantity,
               freeQuantity: promo.freeQuantity,
               totalQuantity: promo.totalQuantity,
@@ -1196,7 +1446,10 @@ export function PosPayment({
             id: `g-${product.id}`,
             kind: 'grocery',
             product,
-            quantity: 1,
+            quantity: nextPaid,
+            unitPrice,
+            sellingMode,
+            priceType,
             paidQuantity: promo.paidQuantity,
             freeQuantity: promo.freeQuantity,
             totalQuantity: promo.totalQuantity,
@@ -1216,7 +1469,13 @@ export function PosPayment({
       if (nextQty <= 0) {
         return current.filter(i => i.id !== item.id)
       }
-      const promo = calculatePromotion(nextQty, item.product)
+
+      const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+        item.product,
+        nextQty,
+        item.sellingMode || sellingMode
+      )
+
       const reqTotal = promo.totalQuantity
       if (reqTotal > item.product.stockQuantity) {
         if (promo.promotionApplied) {
@@ -1226,22 +1485,19 @@ export function PosPayment({
         }
         return current
       }
-      const hasDiscount = Boolean(
-        item.product.discountPrice &&
-        item.product.discountPrice > 0 &&
-        item.product.discountPrice < item.product.sellingPrice
-      )
-      const unitPrice = hasDiscount ? item.product.discountPrice! : item.product.sellingPrice
+
       return current.map(i =>
         i.id === item.id
           ? {
             ...item,
             quantity: nextQty,
+            unitPrice,
+            priceType,
             paidQuantity: promo.paidQuantity,
             freeQuantity: promo.freeQuantity,
             totalQuantity: promo.totalQuantity,
             promotionApplied: promo.promotionApplied,
-            total: nextQty * unitPrice,
+            total: itemTotal,
           }
           : i
       )
@@ -1256,7 +1512,13 @@ export function PosPayment({
       if (directQty <= 0) {
         return current
       }
-      const promo = calculatePromotion(directQty, item.product)
+
+      const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+        item.product,
+        directQty,
+        item.sellingMode || sellingMode
+      )
+
       const reqTotal = promo.totalQuantity
       if (reqTotal > item.product.stockQuantity) {
         if (promo.promotionApplied) {
@@ -1268,27 +1530,76 @@ export function PosPayment({
       }
       setNotice('')
       accepted = true
-      const hasDiscount = Boolean(
-        item.product.discountPrice &&
-        item.product.discountPrice > 0 &&
-        item.product.discountPrice < item.product.sellingPrice
-      )
-      const unitPrice = hasDiscount ? item.product.discountPrice! : item.product.sellingPrice
+
       return current.map(i =>
         i.id === item.id
           ? {
             ...item,
             quantity: directQty,
+            unitPrice,
+            priceType,
             paidQuantity: promo.paidQuantity,
             freeQuantity: promo.freeQuantity,
             totalQuantity: promo.totalQuantity,
             promotionApplied: promo.promotionApplied,
-            total: directQty * unitPrice,
+            total: itemTotal,
           }
           : i
       )
     })
     return accepted
+  }
+
+  const toggleItemPriceType = (productId: string) => {
+    setCart(current => {
+      const item = current.find(i => i.kind === 'grocery' && i.product.id === productId) as GroceryCartItem | undefined
+      if (!item || !item.product.wholesaleEnabled) return current
+      const nextType: PriceType = item.priceType === 'WHOLESALE' ? 'RETAIL' : 'WHOLESALE'
+      const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+        item.product,
+        item.quantity,
+        item.sellingMode || sellingMode,
+        nextType
+      )
+      setNotice(`Item set to ${nextType === 'WHOLESALE' ? '📦 Wholesale' : '🛍️ Retail'} price`)
+      setTimeout(() => setNotice(''), 2000)
+      return current.map(i =>
+        i.id === item.id
+          ? {
+            ...item,
+            unitPrice,
+            priceType,
+            paidQuantity: promo.paidQuantity,
+            freeQuantity: promo.freeQuantity,
+            totalQuantity: promo.totalQuantity,
+            promotionApplied: promo.promotionApplied,
+            total: itemTotal,
+          }
+          : i
+      )
+    })
+  }
+
+  const toggleChickenPriceType = (cartItemId: string) => {
+    setCart(current => {
+      return current.map(i => {
+        if (i.id !== cartItemId || i.kind !== 'chicken') return i
+        if (!i.chicken?.wholesalePricePerKg || i.chicken.wholesalePricePerKg <= 0) return i
+        const nextType: PriceType = i.priceType === 'WHOLESALE' ? 'RETAIL' : 'WHOLESALE'
+        const effRate = nextType === 'WHOLESALE' ? i.chicken.wholesalePricePerKg : i.chicken.pricePerKg
+        const newTotal = calculateChickenPrice(i.weightGrams, effRate)
+        setNotice(`Chicken set to ${nextType === 'WHOLESALE' ? '📦 Wholesale' : '🛍️ Retail'} rate`)
+        setTimeout(() => setNotice(''), 2000)
+        return {
+          ...i,
+          pricePerKg: effRate,
+          unitPrice: newTotal,
+          total: newTotal,
+          priceType: nextType,
+          sellingMode: nextType === 'WHOLESALE' ? 'WHOLESALE' : (sellingMode || 'RETAIL'),
+        }
+      })
+    })
   }
 
   const removeFromCart = (id: string) => {
@@ -1545,8 +1856,8 @@ export function PosPayment({
         item.kind === 'chicken'
           ? {
             code: item.code || item.chicken?.code || null,
-            productId: item.productId,
-            productName: item.productName,
+            productId: item.chicken?.id || item.productId,
+            productName: item.chicken?.name || item.productName,
             productType: 'chicken',
             quantity: 1,
             weightGrams: item.weightGrams,
@@ -1554,6 +1865,8 @@ export function PosPayment({
             pricePerKg: item.pricePerKg,
             costPrice: null,
             total: item.total,
+            sellingMode: item.sellingMode || sellingMode,
+            priceType: item.priceType || (item.sellingMode === 'WHOLESALE' || sellingMode === 'WHOLESALE' ? 'WHOLESALE' : 'RETAIL'),
           }
           : {
             code: item.product.code || null,
@@ -1562,12 +1875,7 @@ export function PosPayment({
             productType: 'grocery',
             quantity: item.quantity,
             weightGrams: null,
-            unitPrice:
-              item.product.discountPrice &&
-                item.product.discountPrice > 0 &&
-                item.product.discountPrice < item.product.sellingPrice
-                ? item.product.discountPrice
-                : item.product.sellingPrice,
+            unitPrice: item.unitPrice,
             pricePerKg: null,
             costPrice: item.product.costPrice,
             total: item.total,
@@ -1578,12 +1886,17 @@ export function PosPayment({
             promotionType: item.promotionApplied ? (item.product.promotionType || 'BUY_X_GET_Y_FREE') : null,
             promotionBuyQuantity: item.promotionApplied ? (item.product.promotionBuyQuantity ?? null) : null,
             promotionFreeQuantity: item.promotionApplied ? (item.product.promotionFreeQuantity ?? null) : null,
+            sellingMode: item.sellingMode || sellingMode,
+            priceType: item.priceType || 'RETAIL',
           }
       )
 
       const regularSubtotal = cart.reduce((sum, item) => {
         if (item.kind === 'chicken') return sum + item.total
-        return sum + (item.product.sellingPrice * item.quantity)
+        const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE')
+          ? item.unitPrice
+          : (item.product.retailPrice !== undefined && item.product.retailPrice !== null ? item.product.retailPrice : item.product.sellingPrice)
+        return sum + (itemPrice * item.quantity)
       }, 0)
       const total = cart.reduce((sum, item) => sum + item.total, 0)
       const discount = Math.max(0, regularSubtotal - total)
@@ -1621,6 +1934,7 @@ export function PosPayment({
         customerId: custId,
         customerName: custName,
         status: 'completed',
+        sellingMode: sellingMode,
       }
 
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -1696,7 +2010,10 @@ export function PosPayment({
   const regularSubtotal = useMemo(() => {
     return cart.reduce((sum, item) => {
       if (item.kind === 'chicken') return sum + item.total
-      return sum + item.product.sellingPrice * item.quantity
+      const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE')
+        ? item.unitPrice
+        : (item.product.retailPrice !== undefined && item.product.retailPrice !== null ? item.product.retailPrice : item.product.sellingPrice)
+      return sum + (itemPrice * item.quantity)
     }, 0)
   }, [cart])
 
@@ -1756,44 +2073,92 @@ export function PosPayment({
   // Global Keyboard shortcuts & Hardware Barcode Scanner Wedge Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Direct Print shortcut (F5, F2, F9)
-      if (e.key === 'F5' || e.key === 'F2' || e.key === 'F9') {
+      // Escape key: Close current modal immediately
+      if (e.key === 'Escape') {
+        if (completed) {
+          setCompleted(null)
+          return
+        }
+        if (payment) {
+          setPayment(false)
+          return
+        }
+        if (selected) {
+          setSelected(null)
+          setGrams('')
+          return
+        }
+        if (isHoldModalOpen) {
+          setIsHoldModalOpen(false)
+          return
+        }
+        if (isRecallModalOpen) {
+          setIsRecallModalOpen(false)
+          return
+        }
+        if (isCustomerModalOpen) {
+          setIsCustomerModalOpen(false)
+          return
+        }
+        if (collisionOrder) {
+          setCollisionOrder(null)
+          return
+        }
+      }
+
+      // F1: Switch to Retail Mode
+      if (e.key === 'F1') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleSwitchSellingMode('RETAIL')
+        return
+      }
+
+      // F2: Switch to Wholesale Mode
+      if (e.key === 'F2') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleSwitchSellingMode('WHOLESALE')
+        return
+      }
+
+      // F4: Focus Barcode / Search input
+      if (e.key === 'F4') {
+        e.preventDefault()
+        e.stopPropagation()
+        scanInputRef.current?.focus()
+        scanInputRef.current?.select()
+        return
+      }
+
+      // F9: Open Payment
+      if (e.key === 'F9') {
         e.preventDefault()
         e.stopPropagation()
         if (completed) {
           window.print()
           return
         }
-        if (cart.length > 0 && !isSubmitting && !isHoldModalOpen && !isRecallModalOpen && !isCustomerModalOpen && !selected) {
-          handleDirectPrintSale()
-        } else if (!cart.length && !completed) {
-          setNotice('⚠️ Cart is empty. Please add products before printing.')
-        }
-        return
-      }
-
-      // If any modal is open, do not intercept typing/scanning
-      if (isHoldModalOpen || isRecallModalOpen || isCustomerModalOpen || selected || payment || completed || collisionOrder) {
-        return
-      }
-
-      // F4 to Hold Current Bill
-      if (e.key === 'F4') {
-        e.preventDefault()
-        if (cart.length) {
-          setIsHoldModalOpen(true)
-        }
-        return
-      }
-
-      // Shortcut to open Other Payment Methods (F8, F6, Alt+O)
-      if (e.key === 'F8' || e.key === 'F6' || (e.altKey && (e.key === 'o' || e.key === 'O'))) {
-        e.preventDefault()
-        e.stopPropagation()
         if (cart.length > 0 && !isSubmitting) {
           setPayment(true)
         } else if (!cart.length) {
           setNotice('⚠️ Cart is empty. Please add products before payment.')
+        }
+        return
+      }
+
+      // F5: Direct Quick Print (Exact Cash)
+      if (e.key === 'F5') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (completed) {
+          window.print()
+          return
+        }
+        if (cart.length > 0 && !isSubmitting && !isHoldModalOpen && !isRecallModalOpen && !isCustomerModalOpen && !selected && !payment) {
+          handleDirectPrintSale()
+        } else if (!cart.length && !completed) {
+          setNotice('⚠️ Cart is empty. Please add products before printing.')
         }
         return
       }
@@ -1806,6 +2171,11 @@ export function PosPayment({
         } else {
           setIsRecallModalOpen(true)
         }
+        return
+      }
+
+      // If any modal is open, do not intercept typing/scanning
+      if (isHoldModalOpen || isRecallModalOpen || isCustomerModalOpen || selected || payment || completed || collisionOrder) {
         return
       }
 
@@ -1910,6 +2280,7 @@ export function PosPayment({
       itemCount: cart.reduce((sum, item) => sum + (item.kind === 'grocery' ? item.quantity : 1), 0),
       total,
       cashier: profile?.full_name || 'Cashier',
+      sellingMode,
     }
     heldOrdersStore.save(order)
     setCart([])
@@ -1928,9 +2299,15 @@ export function PosPayment({
   const executeResume = (order: HeldOrder) => {
     const hydratedItems: Cart[] = order.items.map(item => {
       if (item.kind === 'chicken') return item
-      const promo = calculatePromotion(item.quantity, item.product)
+      const promo = item.priceType === 'WHOLESALE'
+        ? { paidQuantity: item.quantity, freeQuantity: 0, totalQuantity: item.quantity, promotionApplied: false }
+        : calculatePromotion(item.quantity, item.product)
+      const uPrice = item.unitPrice ?? ((item.priceType === 'WHOLESALE' ? getProductWholesalePrice(item.product) : null) ?? getProductRetailPrice(item.product))
       return {
         ...item,
+        unitPrice: uPrice,
+        sellingMode: item.sellingMode || order.sellingMode || 'RETAIL',
+        priceType: item.priceType || 'RETAIL',
         paidQuantity: item.paidQuantity ?? promo.paidQuantity,
         freeQuantity: item.freeQuantity ?? promo.freeQuantity,
         totalQuantity: item.totalQuantity ?? promo.totalQuantity,
@@ -1938,6 +2315,9 @@ export function PosPayment({
       }
     })
     setCart(hydratedItems)
+    if (order.sellingMode) {
+      setSellingMode(order.sellingMode)
+    }
     heldOrdersStore.remove(order.id)
     setIsRecallModalOpen(false)
     setCollisionOrder(null)
@@ -1955,6 +2335,7 @@ export function PosPayment({
       itemCount: cart.reduce((sum, item) => sum + (item.kind === 'grocery' ? item.quantity : 1), 0),
       total,
       cashier: profile?.full_name || 'Cashier',
+      sellingMode,
     }
     heldOrdersStore.save(currentHeld)
     executeResume(orderToResume)
@@ -1981,7 +2362,12 @@ export function PosPayment({
   )
 
   const selectedWeight = parseWeightInGrams(grams)
-  const customEstimated = selected && selectedWeight ? calculateChickenPrice(selectedWeight, selected.pricePerKg) : 0
+  const selectedEffectiveRate = selected
+    ? (sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg !== undefined && selected.wholesalePricePerKg !== null && selected.wholesalePricePerKg > 0
+        ? selected.wholesalePricePerKg
+        : selected.pricePerKg)
+    : 0
+  const customEstimated = selected && selectedWeight ? calculateChickenPrice(selectedWeight, selectedEffectiveRate) : 0
 
   const reset = () => {
     setCompleted(null)
@@ -2000,7 +2386,7 @@ export function PosPayment({
           <header className="pos-bill-header">
             <div className="bill-header-info">
               <small>CURRENT BILL</small>
-              <h2>Invoice #{salesStore.getNextInvoice()}</h2>
+              <h2 style={{ whiteSpace: 'nowrap' }}>Invoice #{salesStore.getNextInvoice()}</h2>
             </div>
             <div className="bill-header-actions">
               <button
@@ -2009,7 +2395,7 @@ export function PosPayment({
                 onClick={() => setIsCustomerModalOpen(true)}
                 title="Select customer for credit or billing"
               >
-                <span>👤 {selectedCustomer ? selectedCustomer.name : 'Walk-in Customer'}</span>
+                <span>👤 {selectedCustomer ? selectedCustomer.name : 'Walk-in'}</span>
                 {selectedCustomer && getCustomerOutstanding(selectedCustomer.id) > 0 && (
                   <span style={{ fontSize: '10px', color: '#f3b625', fontWeight: 800 }}>
                     ({formatMoney(getCustomerOutstanding(selectedCustomer.id))})
@@ -2030,15 +2416,6 @@ export function PosPayment({
               )}
               <button
                 type="button"
-                className="btn-hold-bill"
-                onClick={() => setIsHoldModalOpen(true)}
-                disabled={!cart.length}
-                title="Hold current bill (F4)"
-              >
-                ⏸️ Hold
-              </button>
-              <button
-                type="button"
                 className={`btn-held-list ${heldOrders.length > 0 ? 'has-held' : ''}`}
                 onClick={() => setIsRecallModalOpen(true)}
                 title="View held bills"
@@ -2055,7 +2432,7 @@ export function PosPayment({
                 }}
                 title="Start New Bill"
               >
-                + New Bill
+                + New
               </button>
             </div>
           </header>
@@ -2127,7 +2504,25 @@ export function PosPayment({
                               </div>
                             </div>
                             <div className="pos-dropdown-item-right">
-                              <span className="pos-dropdown-price">{formatMoney(item.pricePerKg)}/kg</span>
+                              {sellingMode === 'WHOLESALE' &&
+                              item.wholesalePricePerKg &&
+                              item.wholesalePricePerKg > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ background: '#0284c7', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: '3px', fontWeight: 800 }}>
+                                      WHOLESALE
+                                    </span>
+                                    <span className="pos-dropdown-price" style={{ color: '#38bdf8' }}>
+                                      {formatMoney(item.wholesalePricePerKg)}/kg
+                                    </span>
+                                  </div>
+                                  <del style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                    {formatMoney(item.pricePerKg)}/kg
+                                  </del>
+                                </div>
+                              ) : (
+                                <span className="pos-dropdown-price">{formatMoney(item.pricePerKg)}/kg</span>
+                              )}
                               <span className="pos-dropdown-action-hint">Choose weight →</span>
                             </div>
                           </button>
@@ -2161,17 +2556,35 @@ export function PosPayment({
                               </div>
                             </div>
                             <div className="pos-dropdown-item-right">
-                              {isDiscounted ? (
+                              {sellingMode === 'WHOLESALE' &&
+                              item.wholesaleEnabled &&
+                              item.wholesalePrice !== null &&
+                              item.wholesalePrice !== undefined &&
+                              Number(item.wholesalePrice) > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ background: '#0284c7', color: '#fff', fontSize: '10px', padding: '1px 5px', borderRadius: '3px', fontWeight: 800 }}>
+                                      WHOLESALE
+                                    </span>
+                                    <span className="pos-dropdown-price" style={{ color: '#38bdf8' }}>
+                                      {formatMoney(Number(item.wholesalePrice))}
+                                    </span>
+                                  </div>
+                                  <small style={{ color: '#94a3b8', fontSize: '11px' }}>
+                                    Min: {item.wholesaleMinQuantity || 1} {item.unit || 'pcs'}
+                                  </small>
+                                </div>
+                              ) : isDiscounted ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                   <del style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {formatMoney(item.sellingPrice)}
+                                    {formatMoney(item.retailPrice ?? item.sellingPrice)}
                                   </del>
                                   <span className="pos-dropdown-price" style={{ color: '#10b981' }}>
                                     {formatMoney(item.discountPrice!)}
                                   </span>
                                 </div>
                               ) : (
-                                <span className="pos-dropdown-price">{formatMoney(item.sellingPrice)}</span>
+                                <span className="pos-dropdown-price">{formatMoney(item.retailPrice ?? item.sellingPrice)}</span>
                               )}
                               <span className={`pos-dropdown-stock ${isOut ? 'out' : isLow ? 'low' : ''}`}>
                                 {isOut ? 'OUT OF STOCK' : `Stock: ${item.stockQuantity} ${item.unit || 'pcs'}`}
@@ -2209,7 +2622,173 @@ export function PosPayment({
                 {cart.map(item => (
                   <div className="pos-cart-row" key={item.id}>
                     <div className="col-item">
-                      <b>{item.kind === 'chicken' ? item.productName : item.product.name}</b>
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                        <b>{item.kind === 'chicken' ? item.productName : item.product.name}</b>
+                        {item.kind === 'chicken' && (
+                          item.chicken?.wholesalePricePerKg && item.chicken.wholesalePricePerKg > 0 ? (
+                            item.priceType === 'WHOLESALE' ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleChickenPriceType(item.id)}
+                                className="pos-wholesale-cart-pill"
+                                style={{
+                                  background: '#0284c7',
+                                  color: '#ffffff',
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  letterSpacing: '0.5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                }}
+                                title="Click to switch chicken to Retail Price"
+                              >
+                                <span>📦 WHOLESALE</span>
+                                <span style={{ fontSize: '9px', opacity: 0.8 }}>▾</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleChickenPriceType(item.id)}
+                                style={{
+                                  background: '#1e293b',
+                                  color: '#94a3b8',
+                                  border: '1px solid #475569',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                }}
+                                title="Click to switch chicken to Wholesale Price"
+                              >
+                                <span>🛍️ RETAIL</span>
+                                <span style={{ fontSize: '9px', opacity: 0.8 }}>▾</span>
+                              </button>
+                            )
+                          ) : item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE' ? (
+                            <span
+                              className="pos-wholesale-cart-pill"
+                              style={{
+                                background: '#0284c7',
+                                color: '#ffffff',
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                letterSpacing: '0.5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                              }}
+                            >
+                              📦 WHOLESALE
+                            </span>
+                          ) : null
+                        )}
+                        {item.kind === 'grocery' && item.product.wholesaleEnabled && (
+                          item.priceType === 'WHOLESALE' ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleItemPriceType(item.product.id)}
+                              className="pos-wholesale-cart-pill"
+                              style={{
+                                background: '#0284c7',
+                                color: '#ffffff',
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                letterSpacing: '0.5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                              }}
+                              title="Click to switch to Retail Price"
+                            >
+                              <span>📦 WHOLESALE</span>
+                              <span style={{ fontSize: '9px', opacity: 0.8 }}>▾</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleItemPriceType(item.product.id)}
+                              style={{
+                                background: '#1e293b',
+                                color: '#94a3b8',
+                                border: '1px solid #475569',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                              }}
+                              title="Click to switch to Wholesale Price"
+                            >
+                              <span>🛍️ RETAIL</span>
+                              <span style={{ fontSize: '9px', opacity: 0.8 }}>▾</span>
+                            </button>
+                          )
+                        )}
+                      </div>
+                      {item.kind === 'grocery' &&
+                        (item.sellingMode === 'WHOLESALE' || sellingMode === 'WHOLESALE') &&
+                        item.product.wholesaleEnabled &&
+                        item.product.wholesalePrice &&
+                        Number(item.product.wholesalePrice) > 0 &&
+                        item.quantity < (item.product.wholesaleMinQuantity || 1) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700 }}>
+                              ⚠️ Wholesale min: {item.product.wholesaleMinQuantity || 1} (Using retail {formatMoney(item.unitPrice)})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setGroceryDirectQty(item.product.id, item.product.wholesaleMinQuantity || 1)}
+                              style={{
+                                background: '#0369a1',
+                                border: '1px solid #38bdf8',
+                                color: '#ffffff',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                              }}
+                              title="Increase quantity to wholesale minimum"
+                            >
+                              ⚡ Set to Min: {item.product.wholesaleMinQuantity || 1} ({formatMoney(Number(item.product.wholesalePrice))})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleItemPriceType(item.product.id)}
+                              style={{
+                                background: '#1e293b',
+                                border: '1px solid #475569',
+                                color: '#cbd5e1',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                              }}
+                              title="Force Wholesale price despite quantity"
+                            >
+                              Force Wholesale Price
+                            </button>
+                          </div>
+                        )}
                       {item.kind === 'chicken' && (
                         <span className="tag-chicken-weight">
                           {item.weightGrams >= 1000
@@ -2225,25 +2804,36 @@ export function PosPayment({
                     </div>
 
                     <div className="col-unit">
-                      {item.kind === 'chicken' ? `${item.weightGrams}g` : item.product.unit || 'Pkt'}
+                      {item.kind === 'chicken'
+                        ? item.weightGrams >= 1000
+                          ? `${(item.weightGrams / 1000).toFixed(2).replace(/\.00$/, '')} kg`
+                          : `${item.weightGrams}g`
+                        : item.product.unit || 'Pkt'}
                     </div>
 
                     <div className="col-rate">
                       {item.kind === 'chicken' ? (
                         `${formatMoney(item.pricePerKg)}/kg`
+                      ) : item.priceType === 'WHOLESALE' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                            {formatMoney(item.unitPrice)}
+                          </span>
+                          <small style={{ color: '#94a3b8', fontSize: '10px' }}>Wholesale</small>
+                        </div>
                       ) : item.product.discountPrice &&
                         item.product.discountPrice > 0 &&
-                        item.product.discountPrice < item.product.sellingPrice ? (
+                        item.product.discountPrice < (item.product.retailPrice ?? item.product.sellingPrice) ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
                           <del style={{ color: '#94a3b8', fontSize: '11px', textDecoration: 'line-through' }}>
-                            {formatMoney(item.product.sellingPrice)}
+                            {formatMoney(item.product.retailPrice ?? item.product.sellingPrice)}
                           </del>
                           <span style={{ color: '#10b981', fontWeight: 700 }}>
                             {formatMoney(item.product.discountPrice)}
                           </span>
                         </div>
                       ) : (
-                        formatMoney(item.product.sellingPrice)
+                        formatMoney(item.unitPrice)
                       )}
                     </div>
 
@@ -2326,61 +2916,168 @@ export function PosPayment({
               </div>
             </div>
 
-            <div className="pos-bill-actions-row">
+            <div className="pos-checkout-actions-container">
+              {/* PRIMARY PAY BUTTON - FULL WIDTH, PROMINENT & HIGH-VISIBILITY */}
               <button
                 type="button"
-                className="pos-btn-hold-action"
-                disabled={!cart.length || isSubmitting}
-                onClick={() => setIsHoldModalOpen(true)}
-                title="Hold Current Bill (F4)"
-              >
-                <span>⏸️ Hold (F4)</span>
-              </button>
-
-              <button
-                type="button"
-                className="pos-btn-pay pos-btn-direct-print"
-                disabled={!cart.length || isSubmitting}
-                onClick={handleDirectPrintSale}
-                title="Direct Print & Complete Bill (Shortcut: F5)"
-              >
-                <span className="pay-icon">🖨️</span>
-                <span className="pay-text">
-                  {isSubmitting ? 'PRINTING...' : 'DIRECT PRINT (F5)'}
-                </span>
-                <b className="pay-amount">{formatMoney(total)}</b>
-              </button>
-
-              <button
-                type="button"
-                className="pos-btn-other-method"
+                className="pos-btn-pay-main"
                 disabled={!cart.length || isSubmitting}
                 onClick={() => setPayment(true)}
-                title="Card / Other Payment Methods (Shortcut: F8 / Alt+O)"
+                title="Complete Sale & Open Payment (Shortcut: F9)"
               >
-                💳 Other (F8)
+                <div className="pay-main-left">
+                  <span className="pay-main-icon">💳</span>
+                  <span className="pay-main-title">PAY NOW</span>
+                  <kbd className="pay-main-kbd">F9</kbd>
+                </div>
+                <div className="pay-main-right">
+                  <b className="pay-main-amount">{formatMoney(total)}</b>
+                  <span className="pay-main-arrow">➔</span>
+                </div>
               </button>
+
+              {/* SECONDARY UTILITY ACTIONS ROW */}
+              <div className="pos-secondary-actions-row">
+                <button
+                  type="button"
+                  className="pos-btn-secondary pos-btn-hold-bill"
+                  disabled={!cart.length || isSubmitting}
+                  onClick={() => setIsHoldModalOpen(true)}
+                  title="Hold Current Bill (Shortcut: Alt+H or F4)"
+                >
+                  <span className="sec-icon">⏸️</span>
+                  <span className="sec-label">Hold Bill</span>
+                  <kbd className="sec-kbd">Alt+H</kbd>
+                </button>
+
+                <button
+                  type="button"
+                  className="pos-btn-secondary pos-btn-quick-print"
+                  disabled={!cart.length || isSubmitting}
+                  onClick={handleDirectPrintSale}
+                  title="Exact Cash & Direct Print (Shortcut: F5)"
+                >
+                  <span className="sec-icon">🖨️</span>
+                  <span className="sec-label">Quick Print</span>
+                  <kbd className="sec-kbd">F5</kbd>
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
         {/* RIGHT COLUMN: CATALOG (CHICKEN / GROCERY) */}
         <section className="pos-catalog-panel">
-          <div className="catalog-tabs-bar">
-            <button
-              type="button"
-              className={`catalog-tab-btn ${tab === 'Chicken' ? 'active' : ''}`}
-              onClick={() => setTab('Chicken')}
+          {sellingMode === 'WHOLESALE' && (
+            <div
+              style={{
+                background: 'linear-gradient(90deg, #0369a1, #0284c7)',
+                color: '#ffffff',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '0.6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+                boxShadow: '0 2px 10px rgba(2, 132, 199, 0.4)',
+              }}
             >
-              🍗 FRESH CHICKEN CUTS
-            </button>
-            <button
-              type="button"
-              className={`catalog-tab-btn ${tab === 'Grocery' ? 'active' : ''}`}
-              onClick={() => setTab('Grocery')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📦</span>
+                <span>WHOLESALE SELLING MODE ACTIVE (Bulk Pricing Automatically Applied)</span>
+              </div>
+              <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+                Press [F1] for Retail
+              </span>
+            </div>
+          )}
+
+          <div className="catalog-tabs-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className={`catalog-tab-btn ${tab === 'Chicken' ? 'active' : ''}`}
+                onClick={() => setTab('Chicken')}
+                style={{ minHeight: '44px' }}
+              >
+                🍗 FRESH CHICKEN CUTS
+              </button>
+              <button
+                type="button"
+                className={`catalog-tab-btn ${tab === 'Grocery' ? 'active' : ''}`}
+                onClick={() => setTab('Grocery')}
+                style={{ minHeight: '44px' }}
+              >
+                🛒 GROCERY PRODUCTS
+              </button>
+            </div>
+
+            {/* SELLING MODE SELECTOR */}
+            <div
+              className="pos-selling-mode-selector"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: '#0f172a',
+                padding: '4px',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                gap: '4px',
+              }}
+              title="Selling Mode: Switch between Retail (F1) and Wholesale (F2)"
             >
-              🛒 GROCERY PRODUCTS
-            </button>
+              <button
+                type="button"
+                className={`pos-mode-btn ${sellingMode === 'RETAIL' ? 'active' : ''}`}
+                onClick={() => handleSwitchSellingMode('RETAIL')}
+                style={{
+                  minHeight: '44px',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  background: sellingMode === 'RETAIL' ? '#2563eb' : 'transparent',
+                  color: sellingMode === 'RETAIL' ? '#ffffff' : '#94a3b8',
+                  transition: 'all 0.15s ease',
+                  boxShadow: sellingMode === 'RETAIL' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>🛍️ RETAIL</span>
+                <kbd style={{ fontSize: '10px', background: 'rgba(255,255,255,0.2)', padding: '2px 4px', borderRadius: '3px' }}>F1</kbd>
+              </button>
+              <button
+                type="button"
+                className={`pos-mode-btn ${sellingMode === 'WHOLESALE' ? 'active' : ''}`}
+                onClick={() => handleSwitchSellingMode('WHOLESALE')}
+                style={{
+                  minHeight: '44px',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  background: sellingMode === 'WHOLESALE' ? '#0284c7' : 'transparent',
+                  color: sellingMode === 'WHOLESALE' ? '#ffffff' : '#94a3b8',
+                  boxShadow: sellingMode === 'WHOLESALE' ? '0 0 12px rgba(2, 132, 199, 0.5)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>📦 WHOLESALE</span>
+                <kbd style={{ fontSize: '10px', background: 'rgba(255,255,255,0.2)', padding: '2px 4px', borderRadius: '3px' }}>F2</kbd>
+              </button>
+            </div>
           </div>
 
           <div className="catalog-content-area">
@@ -2415,7 +3112,19 @@ export function PosPayment({
                           <span className="cut-code-badge">{item.code || 'CH---'}</span>
                           <span className="cut-name">{item.name}</span>
                         </div>
-                        <b className="cut-price">{formatMoney(item.pricePerKg)} / KG</b>
+                        {sellingMode === 'WHOLESALE' && item.wholesalePricePerKg && item.wholesalePricePerKg > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ background: '#0284c7', color: '#fff', fontSize: '9px', padding: '1px 4px', borderRadius: '3px', fontWeight: 800 }}>
+                                WHOLESALE
+                              </span>
+                              <del style={{ color: '#94a3b8', fontSize: '11px' }}>{formatMoney(item.pricePerKg)}</del>
+                            </div>
+                            <b className="cut-price" style={{ color: '#38bdf8' }}>{formatMoney(item.wholesalePricePerKg)} / KG</b>
+                          </div>
+                        ) : (
+                          <b className="cut-price">{formatMoney(item.pricePerKg)} / KG</b>
+                        )}
                         <span className="cut-badge">{item.cut || item.name} Cut</span>
                       </button>
                     ))
@@ -2477,16 +3186,34 @@ export function PosPayment({
                           </div>
 
                           <div className="card-bottom">
-                            {product.discountPrice &&
+                            {sellingMode === 'WHOLESALE' &&
+                            product.wholesaleEnabled &&
+                            product.wholesalePrice !== null &&
+                            product.wholesalePrice !== undefined &&
+                            Number(product.wholesalePrice) > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ background: '#0284c7', color: '#ffffff', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                                    WHOLESALE
+                                  </span>
+                                  <span style={{ color: '#94a3b8', fontSize: '11px', fontWeight: 600 }}>
+                                    Min: {product.wholesaleMinQuantity || 1}
+                                  </span>
+                                </div>
+                                <b className="product-price" style={{ color: '#38bdf8' }}>
+                                  {formatMoney(Number(product.wholesalePrice))}
+                                </b>
+                              </div>
+                            ) : product.discountPrice &&
                               product.discountPrice > 0 &&
-                              product.discountPrice < product.sellingPrice ? (
+                              product.discountPrice < (product.retailPrice ?? product.sellingPrice) ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <del style={{ color: '#94a3b8', fontSize: '11px', textDecoration: 'line-through' }}>
-                                    {formatMoney(product.sellingPrice)}
+                                    {formatMoney(product.retailPrice ?? product.sellingPrice)}
                                   </del>
                                   <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '10px', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                                    SAVE {formatMoney(product.sellingPrice - product.discountPrice)}
+                                    SAVE {formatMoney((product.retailPrice ?? product.sellingPrice) - product.discountPrice)}
                                   </span>
                                 </div>
                                 <b className="product-price" style={{ color: '#10b981' }}>
@@ -2494,7 +3221,7 @@ export function PosPayment({
                                 </b>
                               </div>
                             ) : (
-                              <b className="product-price">{formatMoney(product.sellingPrice)}</b>
+                              <b className="product-price">{formatMoney(product.retailPrice ?? product.sellingPrice)}</b>
                             )}
                             <div className="product-stock-tag">
                               {isOut ? (
@@ -2542,7 +3269,14 @@ export function PosPayment({
                 <small>SELECT WEIGHT · <strong style={{ color: '#f3b625' }}>{selected.code}</strong></small>
                 <h2>{selected.name}</h2>
                 <p>
-                  Rate: <strong>{formatMoney(selected.pricePerKg)} / KG</strong>
+                  {sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg && selected.wholesalePricePerKg > 0 ? (
+                    <span>
+                      Wholesale Rate: <strong style={{ color: '#38bdf8' }}>{formatMoney(selected.wholesalePricePerKg)} / KG</strong>
+                      <del style={{ color: '#94a3b8', marginLeft: '8px', fontSize: '12px' }}>{formatMoney(selected.pricePerKg)}</del>
+                    </span>
+                  ) : (
+                    <span>Rate: <strong>{formatMoney(selected.pricePerKg)} / KG</strong></span>
+                  )}
                 </p>
               </div>
               <button
@@ -2558,20 +3292,28 @@ export function PosPayment({
 
             <div className="editor-body">
               <div className="quick-weights-section">
-                <label style={{ marginBottom: '8px', display: 'block' }}>QUICK WEIGHT PRESETS</label>
-                <div className="quick-weight-chips">
+                <label style={{ marginBottom: '8px', display: 'block', fontWeight: 700 }}>
+                  QUICK WEIGHT PRESETS (TAP TO ADD IMMEDIATELY)
+                </label>
+                <div className="quick-weight-chips" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                   {quickWeights.map(w => {
-                    const calcPrice = calculateChickenPrice(w, selected.pricePerKg)
-                    const isChosen = selectedWeight === w
+                    const effRate = sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg && selected.wholesalePricePerKg > 0
+                      ? selected.wholesalePricePerKg
+                      : selected.pricePerKg
+                    const calcPrice = calculateChickenPrice(w, effRate)
                     return (
                       <button
                         type="button"
                         key={w}
-                        className={`quick-weight-btn ${isChosen ? 'active' : ''}`}
-                        onClick={() => setGrams(String(w))}
+                        className="quick-weight-btn"
+                        style={{ minHeight: '56px', padding: '8px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => addChicken(w)}
+                        title={`Immediately add ${w >= 1000 ? `${w / 1000}kg` : `${w}g`} of ${selected.name}`}
                       >
-                        <span>{w >= 1000 ? `${(w / 1000).toFixed(1).replace(/\.0$/, '')} KG` : `${w}g`}</span>
-                        <small>{formatMoney(calcPrice)}</small>
+                        <span style={{ fontSize: '16px', fontWeight: 800 }}>{w >= 1000 ? `${(w / 1000).toFixed(1).replace(/\.0$/, '')} KG` : `${w}g`}</span>
+                        <small style={{ color: sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg ? '#38bdf8' : '#f3b625', fontWeight: 700, fontSize: '13px' }}>
+                          {formatMoney(calcPrice)}
+                        </small>
                       </button>
                     )
                   })}
@@ -2600,10 +3342,10 @@ export function PosPayment({
                     }
                   }}
                   inputMode="decimal"
-                  placeholder="e.g. 500, 750, 1200 or 1.5"
+                  placeholder="e.g. .250 for 250g, 1 for 1kg, 1.5 for 1.5kg"
                 />
                 <span style={{ fontSize: '11px', color: '#8b9aa7', marginTop: '4px', display: 'block' }}>
-                  Type in grams (e.g. <code>500</code> for 500g) or kilograms (e.g. <code>1.5</code> for 1.5kg)
+                  Type: <code>.250</code> = 250g, <code>1</code> = 1kg, <code>1.5</code> = 1.5kg (or grams e.g. <code>500</code>)
                 </span>
               </label>
 
@@ -2614,17 +3356,11 @@ export function PosPayment({
                 </div>
                 <div className="preview-row">
                   <span>Weight:</span>
-                  <b>
-                    {selectedWeight
-                      ? selectedWeight >= 1000
-                        ? `${(selectedWeight / 1000).toFixed(3).replace(/\.?0+$/, '')} kg (${selectedWeight}g)`
-                        : `${selectedWeight}g`
-                      : '—'}
-                  </b>
+                  <b>{selectedWeight ? formatWeightDisplay(selectedWeight) : '—'}</b>
                 </div>
                 <div className="preview-row">
                   <span>Rate:</span>
-                  <b>{formatMoney(selected.pricePerKg)} / kg</b>
+                  <b>{formatMoney(selectedEffectiveRate)} / kg</b>
                 </div>
                 <div className="preview-total-row">
                   <span>Total Price:</span>
@@ -2665,6 +3401,7 @@ export function PosPayment({
           onSelectCustomer={setSelectedCustomer}
           onCancel={() => setPayment(false)}
           onComplete={completeSale}
+          sellingMode={sellingMode}
         />
       )}
 

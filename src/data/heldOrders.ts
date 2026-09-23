@@ -6,6 +6,9 @@ export type GroceryCartItem = {
   kind: 'grocery'
   product: GroceryProduct
   quantity: number
+  unitPrice?: number
+  sellingMode?: 'RETAIL' | 'WHOLESALE'
+  priceType?: 'RETAIL' | 'WHOLESALE'
   paidQuantity?: number
   freeQuantity?: number
   totalQuantity?: number
@@ -28,6 +31,7 @@ export interface HeldOrder {
   itemCount: number
   total: number
   cashier?: string
+  sellingMode?: 'RETAIL' | 'WHOLESALE'
 }
 
 const STORAGE_KEY = 'pos-held-orders'
