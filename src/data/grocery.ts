@@ -1,3 +1,14 @@
+export interface ProductPackPrice {
+  id: string
+  productId?: string
+  sellingMode: 'RETAIL' | 'WHOLESALE'
+  quantity: number
+  packPrice: number
+  active?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface GroceryProduct {
   id: string
   code: string // Code starting from 100 onwards (e.g. "100", "101", ...)
@@ -15,6 +26,8 @@ export interface GroceryProduct {
   lowStockLevel: number
   unit: string
   active: boolean
+  packPricingEnabled?: boolean | null
+  packPrices?: ProductPackPrice[]
   promotionEnabled?: boolean | null
   promotionType?: string | null
   promotionBuyQuantity?: number | null
@@ -136,6 +149,8 @@ export const groceryStore = {
         wholesaleEnabled: Boolean(p.wholesaleEnabled),
         wholesalePrice: p.wholesalePrice !== undefined && p.wholesalePrice !== null ? Number(p.wholesalePrice) : null,
         wholesaleMinQuantity: p.wholesaleMinQuantity !== undefined && p.wholesaleMinQuantity !== null ? Number(p.wholesaleMinQuantity) : null,
+        packPricingEnabled: Boolean(p.packPricingEnabled),
+        packPrices: Array.isArray(p.packPrices) ? p.packPrices : [],
       }))
       const withCodes = ensureGroceryCodes(normalized)
       if (JSON.stringify(parsed) !== JSON.stringify(withCodes)) {

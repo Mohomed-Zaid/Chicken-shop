@@ -50,12 +50,22 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
         promotion_free_quantity?: number | string
         selling_mode?: string
         price_type?: string
+        pack_pricing_applied?: boolean
+        pack_breakdown?: any
       }>
 
       const items: SaleItem[] = rawItems.map(si => {
         const paidQty = si.paid_quantity != null ? Number(si.paid_quantity) : Number(si.quantity || 1)
         const freeQty = si.free_quantity != null ? Number(si.free_quantity) : 0
         const totalQty = si.total_quantity != null ? Number(si.total_quantity) : (paidQty + freeQty)
+        let parsedBreakdown: any = undefined
+        if (si.pack_breakdown) {
+          if (Array.isArray(si.pack_breakdown)) {
+            parsedBreakdown = si.pack_breakdown
+          } else if (typeof si.pack_breakdown === 'string') {
+            try { parsedBreakdown = JSON.parse(si.pack_breakdown) } catch {}
+          }
+        }
         return {
           productId: si.product_id || '',
           productName: si.product_name || 'Item',
@@ -75,6 +85,8 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
           promotionFreeQuantity: si.promotion_free_quantity != null ? Number(si.promotion_free_quantity) : null,
           sellingMode: (si.selling_mode as 'RETAIL' | 'WHOLESALE') || (row.selling_mode as 'RETAIL' | 'WHOLESALE') || 'RETAIL',
           priceType: (si.price_type as 'RETAIL' | 'WHOLESALE') || 'RETAIL',
+          packPricingApplied: Boolean(si.pack_pricing_applied),
+          packBreakdown: parsedBreakdown,
         }
       })
 
@@ -252,6 +264,8 @@ export const saveSale = async (sale: Sale) => {
       promotion_free_quantity: item.promotionFreeQuantity ?? null,
       selling_mode: item.sellingMode || sale.sellingMode || 'RETAIL',
       price_type: item.priceType || 'RETAIL',
+      pack_pricing_applied: Boolean(item.packPricingApplied),
+      pack_breakdown: item.packBreakdown ? item.packBreakdown : null,
     }))
   )
   return sale
@@ -302,6 +316,8 @@ export const completeSaleAtomically = async (
         total: item.total,
         selling_mode: item.sellingMode || currentSale.sellingMode || 'RETAIL',
         price_type: item.priceType || 'RETAIL',
+        pack_pricing_applied: Boolean(item.packPricingApplied),
+        pack_breakdown: item.packBreakdown ? item.packBreakdown : null,
       })),
     }
 

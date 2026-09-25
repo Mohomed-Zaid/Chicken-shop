@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { categories, getNextGroceryCode, type GroceryProduct } from '../data/grocery'
+import { categories, getNextGroceryCode, type GroceryProduct, type ProductPackPrice } from '../data/grocery'
 import { formatMoney } from '../data/chicken'
 import { storageAdapter } from '../services/storageAdapter'
 import { saveProducts } from '../services/supabase/productService'
@@ -96,6 +96,8 @@ export function Products({
                 lowStockLevel: 0,
                 unit: 'Piece',
                 active: true,
+                packPricingEnabled: false,
+                packPrices: [],
                 promotionEnabled: false,
                 promotionType: 'BUY_X_GET_Y_FREE',
                 promotionBuyQuantity: 2,
@@ -188,6 +190,26 @@ export function Products({
                         ⏸️ {getPromotionStatus(item).toUpperCase()}: BUY {item.promotionBuyQuantity || 2} GET {item.promotionFreeQuantity || 1} FREE
                       </span>
                     )}
+                  </div>
+                )}
+                {item.packPricingEnabled && item.packPrices && item.packPrices.length > 0 && (
+                  <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {item.packPrices.filter(p => p.active !== false).map(p => (
+                      <span
+                        key={p.id}
+                        style={{
+                          background: p.sellingMode === 'WHOLESALE' ? '#075985' : '#1e3a5f',
+                          color: '#93c5fd',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid #2563eb',
+                        }}
+                      >
+                        📦 {p.sellingMode === 'WHOLESALE' ? 'Ws ' : ''}{p.quantity} = {formatMoney(p.packPrice)}
+                      </span>
+                    ))}
                   </div>
                 )}
               </span>
@@ -340,6 +362,64 @@ function Editor({
 }) {
   const [product, setProduct] = useState(item)
   const [error, setError] = useState('')
+  const [newRetailQty, setNewRetailQty] = useState('')
+  const [newRetailPrice, setNewRetailPrice] = useState('')
+  const [newWsQty, setNewWsQty] = useState('')
+  const [newWsPrice, setNewWsPrice] = useState('')
+  const [packRuleError, setPackRuleError] = useState('')
+
+  const handleAddPackRule = (sellingMode: 'RETAIL' | 'WHOLESALE') => {
+    setPackRuleError('')
+    const qtyStr = sellingMode === 'RETAIL' ? newRetailQty : newWsQty
+    const priceStr = sellingMode === 'RETAIL' ? newRetailPrice : newWsPrice
+
+    const qty = parseInt(qtyStr.trim(), 10)
+    const price = parseFloat(priceStr.trim())
+
+    if (isNaN(qty) || qty <= 1) {
+      setPackRuleError('Pack quantity must be greater than 1.')
+      return
+    }
+    if (isNaN(price) || price <= 0) {
+      setPackRuleError('Pack price must be greater than 0.')
+      return
+    }
+
+    const currentRules = product.packPrices || []
+    if (currentRules.some(r => r.sellingMode === sellingMode && r.quantity === qty)) {
+      setPackRuleError(`A ${sellingMode.toLowerCase()} pack rule for quantity ${qty} already exists. Duplicate pack quantities are not allowed.`)
+      return
+    }
+
+    const newRule: ProductPackPrice = {
+      id: `pack-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      productId: product.id,
+      sellingMode,
+      quantity: qty,
+      packPrice: price,
+      active: true,
+    }
+
+    setProduct({
+      ...product,
+      packPrices: [...currentRules, newRule].sort((a, b) => a.quantity - b.quantity),
+    })
+
+    if (sellingMode === 'RETAIL') {
+      setNewRetailQty('')
+      setNewRetailPrice('')
+    } else {
+      setNewWsQty('')
+      setNewWsPrice('')
+    }
+  }
+
+  const handleRemovePackRule = (ruleId: string) => {
+    setProduct({
+      ...product,
+      packPrices: (product.packPrices || []).filter(r => r.id !== ruleId),
+    })
+  }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -406,6 +486,32 @@ function Editor({
       }
     }
 
+    if (product.packPricingEnabled) {
+      const rules = product.packPrices || []
+      for (const r of rules) {
+        if (!r.quantity || r.quantity <= 1) {
+          return setError('All pack quantities must be greater than 1.')
+        }
+        if (!r.packPrice || r.packPrice <= 0) {
+          return setError('All pack prices must be greater than 0.')
+        }
+      }
+      const retailQtys = new Set<number>()
+      for (const r of rules.filter(r => r.sellingMode === 'RETAIL')) {
+        if (retailQtys.has(r.quantity)) {
+          return setError(`Duplicate retail pack quantity ${r.quantity} found. Duplicate pack quantities are not allowed.`)
+        }
+        retailQtys.add(r.quantity)
+      }
+      const wsQtys = new Set<number>()
+      for (const r of rules.filter(r => r.sellingMode === 'WHOLESALE')) {
+        if (wsQtys.has(r.quantity)) {
+          return setError(`Duplicate wholesale pack quantity ${r.quantity} found. Duplicate pack quantities are not allowed.`)
+        }
+        wsQtys.add(r.quantity)
+      }
+    }
+
     save(
       {
         code: codeVal,
@@ -423,6 +529,8 @@ function Editor({
         lowStockLevel: Number(product.lowStockLevel),
         unit: product.unit,
         active: product.active,
+        packPricingEnabled: Boolean(product.packPricingEnabled),
+        packPrices: product.packPrices || [],
         promotionEnabled: Boolean(product.promotionEnabled),
         promotionType: product.promotionType || 'BUY_X_GET_Y_FREE',
         promotionBuyQuantity: product.promotionBuyQuantity ? Math.max(1, Math.floor(Number(product.promotionBuyQuantity))) : 2,
@@ -578,7 +686,7 @@ function Editor({
                   Number(product.wholesalePrice) > 0 &&
                   Number(product.retailPrice ?? product.sellingPrice) > 0 &&
                   Number(product.wholesalePrice) >= Number(product.retailPrice ?? product.sellingPrice) && (
-                    <div style={{ background: '#451a03', border: '1px solid #b45309', padding: '10px 14px', borderRadius: '6px', color: '#fef08a', fontSize: '12px', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ background: '#fefce8', border: '1px solid #fef08a', padding: '10px 14px', borderRadius: '6px', color: '#854d0e', fontSize: '12px', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
                       <span style={{ fontSize: '16px' }}>⚠️</span>
                       <span>Wholesale price is not lower than retail price. Please confirm.</span>
                     </div>
@@ -586,6 +694,247 @@ function Editor({
               </div>
             )}
           </div>
+
+          {/* PACK PRICING CONFIGURATION */}
+          <div className={`promo-config-card pack-card ${product.packPricingEnabled ? 'enabled' : ''}`} style={{ gridColumn: '1 / -1' }}>
+            <div className="promo-card-header">
+              <div className="promo-header-info">
+                <span className="promo-badge-tag pack-tag">PACK PRICING</span>
+                <div className="promo-card-title">📦 Pack Pricing</div>
+                <p className="promo-card-desc">Configure bundle package prices for purchasing multiple quantities (e.g. 3 eggs = Rs.100, 6 eggs = Rs.190)</p>
+              </div>
+              <label className="promo-switch-label pack-switch">
+                <input
+                  type="checkbox"
+                  checked={Boolean(product.packPricingEnabled)}
+                  onChange={e =>
+                    setProduct({
+                      ...product,
+                      packPricingEnabled: e.target.checked,
+                      packPrices: product.packPrices || [],
+                    })
+                  }
+                />
+                <span>{product.packPricingEnabled ? 'Pack Pricing ON' : 'Pack Pricing OFF'}</span>
+              </label>
+            </div>
+
+            {product.packPricingEnabled && (
+              <div className="promo-card-body">
+                {packRuleError && (
+                  <div className="pack-alert-error" style={{ marginBottom: '12px' }}>
+                    ⚠️ {packRuleError}
+                  </div>
+                )}
+
+                {/* RETAIL PACK RULES */}
+                <div className="pack-section">
+                  <div className="pack-section-header">
+                    <span className="pack-section-title">🛍️ Retail Pack Rules</span>
+                    <span className="pack-section-subtitle">
+                      (Base retail unit price: {formatMoney(Number(product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : product.sellingPrice))})
+                    </span>
+                  </div>
+
+                  {/* Existing Retail Rules Table */}
+                  <div className="pack-table-wrap">
+                    <table className="pack-table">
+                      <thead>
+                        <tr>
+                          <th>Quantity</th>
+                          <th>Pack Price</th>
+                          <th>Effective Per Unit</th>
+                          <th>Savings</th>
+                          <th style={{ textAlign: 'right' }}>Remove</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(product.packPrices || []).filter(r => r.sellingMode === 'RETAIL' && r.active !== false).length === 0 ? (
+                          <tr>
+                            <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
+                              No retail pack rules configured yet. Add one below (e.g. 3 = Rs.100).
+                            </td>
+                          </tr>
+                        ) : (
+                          (product.packPrices || [])
+                            .filter(r => r.sellingMode === 'RETAIL' && r.active !== false)
+                            .map(r => {
+                              const unitRate = r.packPrice / r.quantity
+                              const normalCost = r.quantity * Number(product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : product.sellingPrice || 0)
+                              const save = Math.max(0, normalCost - r.packPrice)
+                              return (
+                                <tr key={r.id}>
+                                  <td style={{ fontWeight: 700 }}>
+                                    {r.quantity} {product.unit || 'pcs'}
+                                  </td>
+                                  <td style={{ fontWeight: 700, color: '#0284c7' }}>
+                                    {formatMoney(r.packPrice)}
+                                  </td>
+                                  <td style={{ color: '#64748b' }}>
+                                    {formatMoney(unitRate)} / {product.unit || 'pc'}
+                                  </td>
+                                  <td style={{ color: save > 0 ? '#16a34a' : '#64748b', fontWeight: save > 0 ? 700 : 500 }}>
+                                    {save > 0 ? `Save ${formatMoney(save)}` : '—'}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <button
+                                      type="button"
+                                      className="pack-btn-remove"
+                                      onClick={() => handleRemovePackRule(r.id)}
+                                      title="Remove pack rule"
+                                    >
+                                      ✕
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Add Retail Pack Rule Row */}
+                  <div className="pack-add-bar">
+                    <div className="pack-add-field">
+                      <span>PACK QUANTITY (&gt; 1)</span>
+                      <input
+                        type="number"
+                        min="2"
+                        step="1"
+                        value={newRetailQty}
+                        onChange={e => setNewRetailQty(e.target.value)}
+                        placeholder="e.g. 3"
+                      />
+                    </div>
+                    <div className="pack-add-field">
+                      <span>PACK PRICE (RS. &gt; 0)</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={newRetailPrice}
+                        onChange={e => setNewRetailPrice(e.target.value)}
+                        placeholder="e.g. 100"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-add-pack"
+                      onClick={() => handleAddPackRule('RETAIL')}
+                    >
+                      + Add Pack Rule
+                    </button>
+                  </div>
+                </div>
+
+                {/* WHOLESALE PACK RULES (IF WHOLESALE ENABLED) */}
+                {product.wholesaleEnabled && (
+                  <div className="pack-section" style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                    <div className="pack-section-header">
+                      <span className="pack-section-title">📦 Wholesale Pack Rules</span>
+                      <span className="pack-section-subtitle">
+                        (Wholesale individual unit price: {formatMoney(Number(product.wholesalePrice || 0))})
+                      </span>
+                    </div>
+
+                    {/* Existing Wholesale Rules Table */}
+                    <div className="pack-table-wrap">
+                      <table className="pack-table">
+                        <thead>
+                          <tr>
+                            <th>Quantity</th>
+                            <th>Pack Price</th>
+                            <th>Effective Per Unit</th>
+                            <th>Savings</th>
+                            <th style={{ textAlign: 'right' }}>Remove</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(product.packPrices || []).filter(r => r.sellingMode === 'WHOLESALE' && r.active !== false).length === 0 ? (
+                            <tr>
+                              <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
+                                No wholesale pack rules configured. Add one below (e.g. 3 = Rs.90).
+                              </td>
+                            </tr>
+                          ) : (
+                            (product.packPrices || [])
+                              .filter(r => r.sellingMode === 'WHOLESALE' && r.active !== false)
+                              .map(r => {
+                                const unitRate = r.packPrice / r.quantity
+                                const normalCost = r.quantity * Number(product.wholesalePrice || 0)
+                                const save = Math.max(0, normalCost - r.packPrice)
+                                return (
+                                  <tr key={r.id}>
+                                    <td style={{ fontWeight: 700 }}>
+                                      {r.quantity} {product.unit || 'pcs'}
+                                    </td>
+                                    <td style={{ fontWeight: 700, color: '#0284c7' }}>
+                                      {formatMoney(r.packPrice)}
+                                    </td>
+                                    <td style={{ color: '#64748b' }}>
+                                      {formatMoney(unitRate)} / {product.unit || 'pc'}
+                                    </td>
+                                    <td style={{ color: save > 0 ? '#16a34a' : '#64748b', fontWeight: save > 0 ? 700 : 500 }}>
+                                      {save > 0 ? `Save ${formatMoney(save)}` : '—'}
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                      <button
+                                        type="button"
+                                        className="pack-btn-remove"
+                                        onClick={() => handleRemovePackRule(r.id)}
+                                        title="Remove wholesale pack rule"
+                                      >
+                                        ✕
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )
+                              })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Add Wholesale Pack Rule Row */}
+                    <div className="pack-add-bar">
+                      <div className="pack-add-field">
+                        <span>WHOLESALE PACK QTY (&gt; 1)</span>
+                        <input
+                          type="number"
+                          min="2"
+                          step="1"
+                          value={newWsQty}
+                          onChange={e => setNewWsQty(e.target.value)}
+                          placeholder="e.g. 3"
+                        />
+                      </div>
+                      <div className="pack-add-field">
+                        <span>WHOLESALE PACK PRICE (RS.)</span>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={newWsPrice}
+                          onChange={e => setNewWsPrice(e.target.value)}
+                          placeholder="e.g. 90"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-add-pack"
+                        style={{ background: '#0284c7', borderColor: '#0369a1' }}
+                        onClick={() => handleAddPackRule('WHOLESALE')}
+                      >
+                        + Add Wholesale Pack Rule
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <label>
             DISCOUNT PRICE (OPTIONAL RS.)
             <input

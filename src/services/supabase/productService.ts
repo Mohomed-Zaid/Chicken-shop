@@ -1,5 +1,16 @@
-import type { GroceryProduct } from '../../data/grocery'
+import type { GroceryProduct, ProductPackPrice } from '../../data/grocery'
 import { listRows, upsertRows, deleteRow } from './clientHelpers'
+
+export type ProductPackPriceRow = {
+  id: string
+  product_id: string
+  selling_mode: 'RETAIL' | 'WHOLESALE'
+  quantity: number
+  pack_price: number
+  active?: boolean
+  created_at?: string
+  updated_at?: string
+}
 
 export type ProductRow = {
   id: string
@@ -18,6 +29,7 @@ export type ProductRow = {
   low_stock_level: number
   unit: string | null
   active: boolean
+  pack_pricing_enabled?: boolean | null
   promotion_enabled?: boolean | null
   promotion_type?: string | null
   promotion_buy_quantity?: number | null
@@ -29,7 +41,7 @@ export type ProductRow = {
   updated_at?: string
 }
 
-export const rowToProduct = (row: ProductRow): GroceryProduct => {
+export const rowToProduct = (row: ProductRow, packPrices: ProductPackPrice[] = []): GroceryProduct => {
   const sellingPrice = Number(row.selling_price || 0)
   const retailPrice = row.retail_price !== undefined && row.retail_price !== null ? Number(row.retail_price) : sellingPrice
   return {
@@ -49,6 +61,8 @@ export const rowToProduct = (row: ProductRow): GroceryProduct => {
     lowStockLevel: Number(row.low_stock_level || 0),
     unit: row.unit || 'Piece',
     active: row.active ?? true,
+    packPricingEnabled: Boolean(row.pack_pricing_enabled),
+    packPrices,
     promotionEnabled: Boolean(row.promotion_enabled),
     promotionType: row.promotion_type || 'BUY_X_GET_Y_FREE',
     promotionBuyQuantity: row.promotion_buy_quantity != null ? Number(row.promotion_buy_quantity) : 2,
@@ -78,6 +92,7 @@ export const productToRow = (product: GroceryProduct): ProductRow => {
     low_stock_level: product.lowStockLevel,
     unit: product.unit || null,
     active: product.active,
+    pack_pricing_enabled: Boolean(product.packPricingEnabled),
     promotion_enabled: Boolean(product.promotionEnabled),
     promotion_type: product.promotionType || 'BUY_X_GET_Y_FREE',
     promotion_buy_quantity: product.promotionBuyQuantity != null ? Number(product.promotionBuyQuantity) : 2,
@@ -97,11 +112,63 @@ export const productToRow = (product: GroceryProduct): ProductRow => {
 
 export const getProducts = async (): Promise<GroceryProduct[]> => {
   const rows = await listRows<ProductRow>('products')
-  return rows.map(rowToProduct)
+  let packRows: ProductPackPriceRow[] = []
+  try {
+    packRows = await listRows<ProductPackPriceRow>('product_pack_prices')
+  } catch {
+    // If product_pack_prices table doesn't exist yet, gracefully proceed
+  }
+
+  const packMap = new Map<string, ProductPackPrice[]>()
+  for (const pr of packRows) {
+    if (!pr.product_id) continue
+    const list = packMap.get(pr.product_id) || []
+    list.push({
+      id: pr.id,
+      productId: pr.product_id,
+      sellingMode: pr.selling_mode || 'RETAIL',
+      quantity: Number(pr.quantity),
+      packPrice: Number(pr.pack_price),
+      active: pr.active ?? true,
+      createdAt: pr.created_at,
+      updatedAt: pr.updated_at,
+    })
+    packMap.set(pr.product_id, list)
+  }
+
+  return rows.map(row => rowToProduct(row, packMap.get(row.id) || []))
 }
 
-export const saveProducts = (products: GroceryProduct[]) =>
-  upsertRows('products', products.map(productToRow))
+export const saveProducts = async (products: GroceryProduct[]) => {
+  await upsertRows('products', products.map(productToRow))
+
+  // Upsert all pack rules for products that have them
+  const allPackRows: ProductPackPriceRow[] = []
+  for (const p of products) {
+    if (p.packPrices && Array.isArray(p.packPrices)) {
+      for (const pr of p.packPrices) {
+        allPackRows.push({
+          id: pr.id || `pack-${p.id}-${pr.sellingMode}-${pr.quantity}`,
+          product_id: p.id,
+          selling_mode: pr.sellingMode,
+          quantity: pr.quantity,
+          pack_price: pr.packPrice,
+          active: pr.active ?? true,
+          created_at: pr.createdAt || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      }
+    }
+  }
+
+  if (allPackRows.length > 0) {
+    try {
+      await upsertRows('product_pack_prices', allPackRows)
+    } catch (err) {
+      console.warn('Could not sync pack prices to product_pack_prices table:', err)
+    }
+  }
+}
 
 export const deleteProduct = (id: string) => deleteRow('products', id)
 

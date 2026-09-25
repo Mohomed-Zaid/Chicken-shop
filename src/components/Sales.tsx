@@ -494,6 +494,17 @@ export function Sales() {
                           🎁 BUY {it.promotionBuyQuantity || 2} GET {it.promotionFreeQuantity || 1} FREE
                         </div>
                       )}
+                      {it.packPricingApplied && (
+                        <div style={{ marginTop: '2px', fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>
+                          📦 Pack Pricing Applied
+                          {Array.isArray(it.packBreakdown) && it.packBreakdown.length > 0 && (
+                            <span style={{ color: '#94a3b8', display: 'block', fontSize: '10px' }}>
+                              ({it.packBreakdown.filter(b => b.packs && b.packs > 0).map(b => `${b.packs} × ${Math.round(b.quantity / (b.packs || 1))}-pack`).join(', ')}
+                              {it.packBreakdown.some(b => !b.packs && b.quantity > 0) ? ` + ${it.packBreakdown.find(b => !b.packs)?.quantity} individual` : ''})
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </span>
                     <span>
                       {it.productType === 'chicken' && it.weightGrams
@@ -514,7 +525,8 @@ export function Sales() {
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <span>{formatMoney(it.unitPrice)}</span>
-                            {isWholesale && <small style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>Wholesale Rate</small>}
+                            {it.packPricingApplied && <small style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>Pack Pricing</small>}
+                            {isWholesale && !it.packPricingApplied && <small style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>Wholesale Rate</small>}
                             {isPromo && <small style={{ color: '#94a3b8' }}>Unit Price</small>}
                           </div>
                         )}
@@ -524,6 +536,11 @@ export function Sales() {
                       {isPromo && (
                         <small style={{ display: 'block', color: '#10b981', fontSize: '11px', fontWeight: 600 }}>
                           Charged: {formatMoney(it.total)}
+                        </small>
+                      )}
+                      {it.packPricingApplied && (
+                        <small style={{ display: 'block', color: '#38bdf8', fontSize: '11px', fontWeight: 600 }}>
+                          Pack Total: {formatMoney(it.total)}
                         </small>
                       )}
                     </span>

@@ -1,5 +1,12 @@
 export type PaymentMethod = 'Cash' | 'Card' | 'Credit' | 'Other'
 export type SaleStatus = 'completed' | 'cancelled'
+export interface PackBreakdownItem {
+  quantity: number;
+  packPrice?: number;
+  packs?: number;
+  unitPrice?: number;
+}
+
 export interface SaleItem {
   code?: string | null;
   productId: string;
@@ -20,6 +27,8 @@ export interface SaleItem {
   promotionFreeQuantity?: number | null;
   sellingMode?: 'RETAIL' | 'WHOLESALE';
   priceType?: 'RETAIL' | 'WHOLESALE';
+  packPricingApplied?: boolean;
+  packBreakdown?: PackBreakdownItem[] | null;
 }
 export interface SaleTransaction {
   id: string;

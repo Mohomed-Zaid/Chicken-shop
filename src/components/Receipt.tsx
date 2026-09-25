@@ -264,14 +264,31 @@ export function Receipt({ sale }: { sale: Sale }) {
                         තොග මිල (WHOLESALE)
                       </span>
                     )}
+                    {item.packPricingApplied && (
+                      <span style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, marginLeft: '6px', border: '1px solid #000', padding: '0 4px', borderRadius: '2px', verticalAlign: 'middle' }}>
+                        පැකේජ් මිල (PACK)
+                      </span>
+                    )}
                   </div>
                   <div className="item-sub-line">
                     <span className="item-rate">
                       {calcText}
-                      {isWholesale && <small style={{ fontWeight: 800, marginLeft: '3px' }}>[WHOLESALE]</small>}
+                      {item.packPricingApplied && <small style={{ fontWeight: 800, marginLeft: '3px' }}>[පැකේජ් මිල]</small>}
+                      {isWholesale && !item.packPricingApplied && <small style={{ fontWeight: 800, marginLeft: '3px' }}>[WHOLESALE]</small>}
                     </span>
                     <span className="item-total">{formatMoney(item.total)}</span>
                   </div>
+                  {item.packPricingApplied && (
+                    <div className="item-pack-sub-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 700, marginTop: '2px' }}>
+                      <span>පැකේජ් මිල යොදන ලදී (Pack Pricing)</span>
+                      {Array.isArray(item.packBreakdown) && item.packBreakdown.length > 0 && (
+                        <span>
+                          {item.packBreakdown.filter(b => b.packs && b.packs > 0).map(b => `${b.packs} × ${Math.round(b.quantity / (b.packs || 1))}-pack`).join(', ')}
+                          {item.packBreakdown.some(b => !b.packs && b.quantity > 0) ? ` + ${item.packBreakdown.find(b => !b.packs)?.quantity} තනි (ind)` : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {hasFree && (
                     <div className="item-promo-sub-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, marginTop: '2px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '2px' }}>
                       <span>+ {item.freeQuantity} නොමිලේ (FREE)</span>

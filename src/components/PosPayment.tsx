@@ -18,13 +18,13 @@ import { useAuth } from '../context/AuthContext'
 import { useSubscription } from '../context/SubscriptionContext'
 import { ConnectionIndicator } from './PwaManager'
 import { heldOrdersStore, generateHeldOrderId, type HeldOrder } from '../data/heldOrders'
-import { calculatePromotion, isPromotionActive, formatPromotionBadge } from '../services/promotionService'
+import { isPromotionActive, formatPromotionBadge } from '../services/promotionService'
 import { customerStore, getCustomerOutstanding, type Customer } from '../data/customers'
 import { syncCustomerToSupabase } from '../services/supabase/customerService'
+import type { PackBreakdownItem } from '../data/records'
 import {
-  getProductSellingPrice,
-  getProductRetailPrice,
-  getProductWholesalePrice,
+  getProductPackRules,
+  resolveGroceryItemPricing,
   type SellingMode,
   type PriceType,
 } from '../services/pricingService'
@@ -41,6 +41,9 @@ type GroceryCartItem = {
   freeQuantity: number
   totalQuantity: number
   promotionApplied: boolean
+  packPricingApplied?: boolean
+  packBreakdown?: PackBreakdownItem[]
+  packsDescription?: string
   total: number
 }
 type Cart = ChickenCartItem | GroceryCartItem
@@ -1303,51 +1306,7 @@ export function PosPayment({
     mode: SellingMode,
     forcePriceType?: PriceType
   ) => {
-    if (forcePriceType === 'RETAIL') {
-      const unitPrice = getProductRetailPrice(product)
-      const promo = calculatePromotion(quantity, product)
-      return {
-        unitPrice,
-        sellingMode: mode,
-        priceType: 'RETAIL' as const,
-        total: promo.paidQuantity * unitPrice,
-        promo,
-      }
-    }
-
-    if (forcePriceType === 'WHOLESALE') {
-      const unitPrice =
-        product.wholesalePrice && Number(product.wholesalePrice) > 0
-          ? Number(product.wholesalePrice)
-          : getProductRetailPrice(product)
-      return {
-        unitPrice,
-        sellingMode: mode,
-        priceType: 'WHOLESALE' as const,
-        total: quantity * unitPrice,
-        promo: { paidQuantity: quantity, freeQuantity: 0, totalQuantity: quantity, promotionApplied: false },
-      }
-    }
-
-    const pricing = getProductSellingPrice(product, quantity, mode)
-    if (pricing.priceType === 'WHOLESALE') {
-      return {
-        unitPrice: pricing.unitPrice,
-        sellingMode: mode,
-        priceType: 'WHOLESALE' as const,
-        total: quantity * pricing.unitPrice,
-        promo: { paidQuantity: quantity, freeQuantity: 0, totalQuantity: quantity, promotionApplied: false },
-      }
-    } else {
-      const promo = calculatePromotion(quantity, product)
-      return {
-        unitPrice: pricing.unitPrice,
-        sellingMode: mode,
-        priceType: 'RETAIL' as const,
-        total: promo.paidQuantity * pricing.unitPrice,
-        promo,
-      }
-    }
+    return resolveGroceryItemPricing(product, quantity, mode, forcePriceType)
   }
 
   const handleSwitchSellingMode = (newMode: SellingMode) => {
@@ -1374,21 +1333,24 @@ export function PosPayment({
             priceType: pType,
           }
         }
-        const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+        const pricing = resolveItemPricing(
           item.product,
           item.quantity,
           newMode
         )
         return {
           ...item,
-          unitPrice,
+          unitPrice: pricing.unitPrice,
           sellingMode: newMode,
-          priceType,
-          paidQuantity: promo.paidQuantity,
-          freeQuantity: promo.freeQuantity,
-          totalQuantity: promo.totalQuantity,
-          promotionApplied: promo.promotionApplied,
-          total: itemTotal,
+          priceType: pricing.priceType,
+          paidQuantity: pricing.promo.paidQuantity,
+          freeQuantity: pricing.promo.freeQuantity,
+          totalQuantity: pricing.promo.totalQuantity,
+          promotionApplied: pricing.promo.promotionApplied,
+          packPricingApplied: pricing.packPricingApplied,
+          packBreakdown: pricing.packBreakdown,
+          packsDescription: pricing.packsDescription,
+          total: pricing.total,
         }
       })
     )
@@ -1408,16 +1370,16 @@ export function PosPayment({
 
     const nextPaid = overrideQty !== undefined ? overrideQty : (found ? found.quantity + 1 : 1)
 
-    const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+    const pricing = resolveItemPricing(
       product,
       nextPaid,
       sellingMode,
       forcePriceType
     )
 
-    const reqTotal = promo.totalQuantity
+    const reqTotal = pricing.promo.totalQuantity
     if (reqTotal > product.stockQuantity) {
-      if (promo.promotionApplied) {
+      if (pricing.promo.promotionApplied) {
         return setNotice(`Insufficient stock for promotion. Available: ${product.stockQuantity}, Required: ${reqTotal}`)
       }
       return setNotice(`Insufficient stock for ${product.name}. Available: ${product.stockQuantity}`)
@@ -1430,14 +1392,17 @@ export function PosPayment({
             ? {
               ...found,
               quantity: nextPaid,
-              unitPrice,
+              unitPrice: pricing.unitPrice,
               sellingMode,
-              priceType,
-              paidQuantity: promo.paidQuantity,
-              freeQuantity: promo.freeQuantity,
-              totalQuantity: promo.totalQuantity,
-              promotionApplied: promo.promotionApplied,
-              total: itemTotal,
+              priceType: pricing.priceType,
+              paidQuantity: pricing.promo.paidQuantity,
+              freeQuantity: pricing.promo.freeQuantity,
+              totalQuantity: pricing.promo.totalQuantity,
+              promotionApplied: pricing.promo.promotionApplied,
+              packPricingApplied: pricing.packPricingApplied,
+              packBreakdown: pricing.packBreakdown,
+              packsDescription: pricing.packsDescription,
+              total: pricing.total,
             }
             : item
         )
@@ -1448,14 +1413,17 @@ export function PosPayment({
             kind: 'grocery',
             product,
             quantity: nextPaid,
-            unitPrice,
+            unitPrice: pricing.unitPrice,
             sellingMode,
-            priceType,
-            paidQuantity: promo.paidQuantity,
-            freeQuantity: promo.freeQuantity,
-            totalQuantity: promo.totalQuantity,
-            promotionApplied: promo.promotionApplied,
-            total: itemTotal,
+            priceType: pricing.priceType,
+            paidQuantity: pricing.promo.paidQuantity,
+            freeQuantity: pricing.promo.freeQuantity,
+            totalQuantity: pricing.promo.totalQuantity,
+            promotionApplied: pricing.promo.promotionApplied,
+            packPricingApplied: pricing.packPricingApplied,
+            packBreakdown: pricing.packBreakdown,
+            packsDescription: pricing.packsDescription,
+            total: pricing.total,
           },
         ]
     )
@@ -1471,15 +1439,15 @@ export function PosPayment({
         return current.filter(i => i.id !== item.id)
       }
 
-      const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+      const pricing = resolveItemPricing(
         item.product,
         nextQty,
         item.sellingMode || sellingMode
       )
 
-      const reqTotal = promo.totalQuantity
+      const reqTotal = pricing.promo.totalQuantity
       if (reqTotal > item.product.stockQuantity) {
-        if (promo.promotionApplied) {
+        if (pricing.promo.promotionApplied) {
           setNotice(`Insufficient stock for promotion. Available: ${item.product.stockQuantity}, Required: ${reqTotal}`)
         } else {
           setNotice(`Maximum available stock reached for ${item.product.name}.`)
@@ -1492,13 +1460,16 @@ export function PosPayment({
           ? {
             ...item,
             quantity: nextQty,
-            unitPrice,
-            priceType,
-            paidQuantity: promo.paidQuantity,
-            freeQuantity: promo.freeQuantity,
-            totalQuantity: promo.totalQuantity,
-            promotionApplied: promo.promotionApplied,
-            total: itemTotal,
+            unitPrice: pricing.unitPrice,
+            priceType: pricing.priceType,
+            paidQuantity: pricing.promo.paidQuantity,
+            freeQuantity: pricing.promo.freeQuantity,
+            totalQuantity: pricing.promo.totalQuantity,
+            promotionApplied: pricing.promo.promotionApplied,
+            packPricingApplied: pricing.packPricingApplied,
+            packBreakdown: pricing.packBreakdown,
+            packsDescription: pricing.packsDescription,
+            total: pricing.total,
           }
           : i
       )
@@ -1514,15 +1485,15 @@ export function PosPayment({
         return current
       }
 
-      const { unitPrice, priceType, total: itemTotal, promo } = resolveItemPricing(
+      const pricing = resolveItemPricing(
         item.product,
         directQty,
         item.sellingMode || sellingMode
       )
 
-      const reqTotal = promo.totalQuantity
+      const reqTotal = pricing.promo.totalQuantity
       if (reqTotal > item.product.stockQuantity) {
-        if (promo.promotionApplied) {
+        if (pricing.promo.promotionApplied) {
           setNotice(`Insufficient stock for promotion. Available: ${item.product.stockQuantity}, Required: ${reqTotal}`)
         } else {
           setNotice(`Maximum available stock reached for ${item.product.name}. Available: ${item.product.stockQuantity}`)
@@ -1537,13 +1508,16 @@ export function PosPayment({
           ? {
             ...item,
             quantity: directQty,
-            unitPrice,
-            priceType,
-            paidQuantity: promo.paidQuantity,
-            freeQuantity: promo.freeQuantity,
-            totalQuantity: promo.totalQuantity,
-            promotionApplied: promo.promotionApplied,
-            total: itemTotal,
+            unitPrice: pricing.unitPrice,
+            priceType: pricing.priceType,
+            paidQuantity: pricing.promo.paidQuantity,
+            freeQuantity: pricing.promo.freeQuantity,
+            totalQuantity: pricing.promo.totalQuantity,
+            promotionApplied: pricing.promo.promotionApplied,
+            packPricingApplied: pricing.packPricingApplied,
+            packBreakdown: pricing.packBreakdown,
+            packsDescription: pricing.packsDescription,
+            total: pricing.total,
           }
           : i
       )
@@ -1889,6 +1863,8 @@ export function PosPayment({
             promotionFreeQuantity: item.promotionApplied ? (item.product.promotionFreeQuantity ?? null) : null,
             sellingMode: item.sellingMode || sellingMode,
             priceType: item.priceType || 'RETAIL',
+            packPricingApplied: Boolean(item.packPricingApplied),
+            packBreakdown: item.packBreakdown || null,
           }
       )
 
@@ -2300,19 +2276,20 @@ export function PosPayment({
   const executeResume = (order: HeldOrder) => {
     const hydratedItems: Cart[] = order.items.map(item => {
       if (item.kind === 'chicken') return item
-      const promo = item.priceType === 'WHOLESALE'
-        ? { paidQuantity: item.quantity, freeQuantity: 0, totalQuantity: item.quantity, promotionApplied: false }
-        : calculatePromotion(item.quantity, item.product)
-      const uPrice = item.unitPrice ?? ((item.priceType === 'WHOLESALE' ? getProductWholesalePrice(item.product) : null) ?? getProductRetailPrice(item.product))
+      const pricing = resolveGroceryItemPricing(item.product, item.quantity, item.sellingMode || order.sellingMode || 'RETAIL', item.priceType)
       return {
         ...item,
-        unitPrice: uPrice,
+        unitPrice: pricing.unitPrice,
         sellingMode: item.sellingMode || order.sellingMode || 'RETAIL',
-        priceType: item.priceType || 'RETAIL',
-        paidQuantity: item.paidQuantity ?? promo.paidQuantity,
-        freeQuantity: item.freeQuantity ?? promo.freeQuantity,
-        totalQuantity: item.totalQuantity ?? promo.totalQuantity,
-        promotionApplied: item.promotionApplied ?? promo.promotionApplied,
+        priceType: pricing.priceType,
+        paidQuantity: pricing.promo.paidQuantity,
+        freeQuantity: pricing.promo.freeQuantity,
+        totalQuantity: pricing.promo.totalQuantity,
+        promotionApplied: pricing.promo.promotionApplied,
+        packPricingApplied: pricing.packPricingApplied,
+        packBreakdown: pricing.packBreakdown,
+        packsDescription: pricing.packsDescription,
+        total: pricing.total,
       }
     })
     setCart(hydratedItems)
@@ -2616,6 +2593,19 @@ export function PosPayment({
                               ) : (
                                 <span className="pos-dropdown-price">{formatMoney(item.retailPrice ?? item.sellingPrice)}</span>
                               )}
+                              {(() => {
+                                const effMode = (sellingMode === 'WHOLESALE' && item.wholesaleEnabled) ? 'WHOLESALE' : 'RETAIL'
+                                const pRules = getProductPackRules(item, effMode)
+                                if (pRules.length > 0) {
+                                  const lowest = pRules.slice().sort((a, b) => a.quantity - b.quantity)[0]
+                                  return (
+                                    <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 700 }}>
+                                      📦 {lowest.quantity} = {formatMoney(lowest.packPrice)}
+                                    </span>
+                                  )
+                                }
+                                return null
+                              })()}
                               <span className={`pos-dropdown-stock ${isOut ? 'out' : isLow ? 'low' : ''}`}>
                                 {isOut ? 'OUT OF STOCK' : `Stock: ${item.stockQuantity} ${item.unit || 'pcs'}`}
                               </span>
@@ -2831,6 +2821,26 @@ export function PosPayment({
                           🎁 {item.paidQuantity} Paid + {item.freeQuantity} Free = {item.totalQuantity}
                         </span>
                       ) : null}
+                      {item.kind === 'grocery' && item.packPricingApplied && (
+                        <div
+                          className="pos-pack-cart-badge"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            color: '#38bdf8',
+                            fontWeight: 700,
+                            marginTop: '2px',
+                            background: 'rgba(56, 189, 248, 0.12)',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          <span>📦 Pack pricing: {item.packsDescription || 'applied'}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="col-unit">
@@ -2844,6 +2854,13 @@ export function PosPayment({
                     <div className="col-rate">
                       {item.kind === 'chicken' ? (
                         `${formatMoney(item.pricePerKg)}/kg`
+                      ) : item.kind === 'grocery' && item.packPricingApplied ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                            {formatMoney(item.unitPrice)}
+                          </span>
+                          <small style={{ color: '#38bdf8', fontSize: '10px' }}>Pack rate</small>
+                        </div>
                       ) : item.priceType === 'WHOLESALE' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
                           <span style={{ color: '#38bdf8', fontWeight: 700 }}>
@@ -3204,15 +3221,36 @@ export function PosPayment({
                           key={product.id}
                           disabled={isOut}
                         >
-                          <div className="card-top">
-                            <span className="product-code-badge">#{product.code}</span>
+                          <div className="grocery-card-top">
+                            <div className="grocery-card-header">
+                              <span className="product-code-badge">#{product.code}</span>
+                              <span className="product-category-tag">{product.category}</span>
+                            </div>
                             <span className="product-title">{product.name}</span>
-                            <span className="product-category-tag">{product.category}</span>
-                            {isPromotionActive(product) && (
-                              <div className="pos-btn-promo-tag">
-                                🎁 {formatPromotionBadge(product)}
-                              </div>
-                            )}
+                            {(() => {
+                              const isPromo = isPromotionActive(product)
+                              const effMode = (sellingMode === 'WHOLESALE' && product.wholesaleEnabled) ? 'WHOLESALE' : 'RETAIL'
+                              const pRules = getProductPackRules(product, effMode)
+                              const hasPack = pRules.length > 0
+                              const lowest = hasPack ? pRules.slice().sort((a, b) => a.quantity - b.quantity)[0] : null
+
+                              if (!isPromo && !hasPack) return null
+
+                              return (
+                                <div className="card-badges-row">
+                                  {isPromo && (
+                                    <span className="pos-btn-promo-tag">
+                                      🎁 {formatPromotionBadge(product)}
+                                    </span>
+                                  )}
+                                  {lowest && (
+                                    <span className="pos-btn-pack-tag">
+                                      📦 {lowest.quantity} = {formatMoney(lowest.packPrice)}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
 
                           <div className="card-bottom">
