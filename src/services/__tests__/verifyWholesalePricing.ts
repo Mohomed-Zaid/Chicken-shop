@@ -228,10 +228,9 @@ const chickenCutWithWholesale: ChickenItem = {
   id: 'chk-whole',
   code: 'CH-WHOLE',
   name: 'Fresh Whole Chicken',
-  category: 'Fresh Meat',
+  cut: 'Whole',
   pricePerKg: 1000,
   wholesalePricePerKg: 920,
-  unit: 'Kg',
   active: true,
 }
 
@@ -239,10 +238,9 @@ const chickenCutNoWholesale: ChickenItem = {
   id: 'chk-wings',
   code: 'CH-WINGS',
   name: 'Chicken Wings',
-  category: 'Fresh Meat',
+  cut: 'Wings',
   pricePerKg: 850,
   wholesalePricePerKg: null,
-  unit: 'Kg',
   active: true,
 }
 
