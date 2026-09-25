@@ -3,6 +3,7 @@ import { useSubscription } from '../context/SubscriptionContext'
 import { useAuth } from '../context/AuthContext'
 import { getBusinessSettings, saveBusinessSettings, type BusinessSettingsRow } from '../services/supabase/settingsService'
 import { storageAdapter } from '../services/storageAdapter'
+import { resetAllDataForRealUse } from '../services/resetService'
 
 export function Settings() {
   const { subscription, status, daysRemaining, expiryDate, history, renew, activate, suspend, reactivate, checkSubscription, loading: subLoading } = useSubscription()
@@ -31,6 +32,13 @@ export function Settings() {
   const [modalBusinessName, setModalBusinessName] = useState('')
   const [licenseProcessing, setLicenseProcessing] = useState(false)
   const [licenseError, setLicenseError] = useState('')
+
+  // System Reset Modal State
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [resetConfirmationInput, setResetConfirmationInput] = useState('')
+  const [clearProductsOption, setClearProductsOption] = useState(true)
+  const [resetProcessing, setResetProcessing] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -121,6 +129,21 @@ export function Settings() {
       setLicenseError(err instanceof Error ? err.message : 'Failed to activate license.')
     } finally {
       setLicenseProcessing(false)
+    }
+  }
+
+  const handleExecuteReset = async () => {
+    if (resetConfirmationInput !== 'RESET') return
+    setResetProcessing(true)
+    setResetError('')
+    try {
+      const result = await resetAllDataForRealUse({ clearProducts: clearProductsOption })
+      setShowResetModal(false)
+      setSaveNotice(result.message)
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Reset failed.')
+    } finally {
+      setResetProcessing(false)
     }
   }
 
@@ -393,6 +416,66 @@ export function Settings() {
         </section>
       </div>
 
+      {/* SYSTEM DATA RESET / PRODUCTION PREPARATION - ADMIN ONLY */}
+      {isAdmin && (
+        <section
+          className="settings-card"
+          style={{
+            marginTop: '24px',
+            maxWidth: isSuperAdmin ? '100%' : '800px',
+            borderColor: 'rgba(239, 68, 68, 0.4)',
+            background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, rgba(15, 23, 42, 0.4) 100%)',
+          }}
+        >
+          <div className="card-header">
+            <div>
+              <small style={{ color: '#ef4444', fontWeight: 700 }}>PRODUCTION LAUNCH</small>
+              <h3 style={{ margin: '4px 0 0' }}>Clear Test Data for Real Use</h3>
+            </div>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#ef4444',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontWeight: 600,
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+              }}
+            >
+              ADMINISTRATOR ONLY
+            </span>
+          </div>
+
+          <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '0.9rem', lineHeight: '1.6', margin: '14px 0 18px' }}>
+            Ready to start live shop operations? Use this tool to wipe test transactions, test customers, held orders, purchases, expenses, and demo products. All invoice and purchase sequences will restart cleanly from <strong>000001</strong>. Your logins, subscription, and store details remain safely intact.
+          </p>
+
+          <div>
+            <button
+              type="button"
+              className="confirm"
+              style={{
+                background: '#dc2626',
+                borderColor: '#ef4444',
+                color: '#ffffff',
+                padding: '10px 18px',
+                fontWeight: 600,
+                fontSize: '0.92rem',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setResetConfirmationInput('')
+                setResetError('')
+                setShowResetModal(true)
+              }}
+            >
+              🗑️ Clear All Test Data for Real Use
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Admin License Modal */}
       {showLicenseModal && (
         <div className="shade">
@@ -443,6 +526,116 @@ export function Settings() {
               </button>
             </footer>
           </form>
+        </div>
+      )}
+
+      {/* Admin System Data Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="shade">
+          <div className="dialog custom-dialog" style={{ maxWidth: '540px' }}>
+            <header>
+              <div>
+                <small style={{ color: '#ef4444', fontWeight: 700 }}>CONFIRM SYSTEM DATA WIPE</small>
+                <h2 style={{ margin: '4px 0 0' }}>Reset Data for Production</h2>
+              </div>
+              <button type="button" onClick={() => !resetProcessing && setShowResetModal(false)}>×</button>
+            </header>
+
+            <div className="editor-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                }}
+              >
+                <p style={{ margin: '0 0 8px', fontWeight: 600, color: '#f87171', fontSize: '0.9rem' }}>
+                  ⚠️ This will permanently remove all test data:
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '20px', color: '#cbd5e1', fontSize: '0.84rem', lineHeight: '1.6' }}>
+                  <li>All <strong>Sales & Invoices</strong> (Invoice counter resets to <code>INV-000001</code>)</li>
+                  <li>All <strong>Held Orders</strong></li>
+                  <li>All <strong>Customers & Credit Payments</strong> (Receipt counter resets to <code>PAY-000001</code>)</li>
+                  <li>All <strong>Purchases, Suppliers & Supplier Payments</strong> (Counter resets to <code>PUR-000001</code>)</li>
+                  <li>All <strong>Inventory movements & adjustments</strong></li>
+                  <li>All <strong>Recorded Expenses</strong></li>
+                  <li>All <strong>Chicken Price Change History</strong></li>
+                </ul>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(34, 197, 94, 0.08)',
+                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                }}
+              >
+                <p style={{ margin: '0 0 8px', fontWeight: 600, color: '#4ade80', fontSize: '0.9rem' }}>
+                  🛡️ Safely preserved (Will NOT be deleted):
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '20px', color: '#cbd5e1', fontSize: '0.84rem', lineHeight: '1.6' }}>
+                  <li><strong>User Logins & Accounts</strong> (Admin and Cashier accounts remain active)</li>
+                  <li><strong>Subscription & License Status</strong> (Your plan stays valid)</li>
+                  <li><strong>Store Details</strong> (Shop name, phone, address, receipt settings)</li>
+                  <li><strong>Standard Chicken Cuts</strong> (Fresh Chicken, Breast, Legs, Wings, etc.)</li>
+                </ul>
+              </div>
+
+              <label
+                className="checkbox-label"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  margin: '14px 0',
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={clearProductsOption}
+                  onChange={e => setClearProductsOption(e.target.checked)}
+                />
+                <span style={{ fontSize: '0.88rem' }}>Also clear grocery products catalog (start with clean 0 products)</span>
+              </label>
+
+              <div style={{ marginTop: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                  Type <strong style={{ color: '#ef4444' }}>RESET</strong> to confirm:
+                </label>
+                <input
+                  value={resetConfirmationInput}
+                  onChange={e => setResetConfirmationInput(e.target.value.toUpperCase())}
+                  placeholder="RESET"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  disabled={resetProcessing}
+                />
+              </div>
+
+              {resetError && <p className="validation" style={{ marginTop: '12px' }}>{resetError}</p>}
+            </div>
+
+            <footer>
+              <button type="button" onClick={() => setShowResetModal(false)} disabled={resetProcessing}>
+                Cancel
+              </button>
+              <button
+                className="confirm"
+                style={{ background: '#dc2626', borderColor: '#ef4444' }}
+                disabled={resetConfirmationInput !== 'RESET' || resetProcessing}
+                onClick={handleExecuteReset}
+              >
+                {resetProcessing ? 'Resetting Data...' : 'Confirm System Reset'}
+              </button>
+            </footer>
+          </div>
         </div>
       )}
     </section>

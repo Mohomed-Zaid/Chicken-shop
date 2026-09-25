@@ -53,6 +53,17 @@ export default function App() {
   const [history, setHistory] = useState<PriceHistoryEntry[]>(() => chickenStore.loadHistory())
   const [grocery, setGrocery] = useState<GroceryProduct[]>(() => groceryStore.load())
 
+  // Listen for system data reset events to immediately clear state
+  useEffect(() => {
+    const handleDataReset = () => {
+      setGrocery([])
+      setHistory([])
+      setItems(chickenStore.loadItems())
+    }
+    window.addEventListener('data_reset', handleDataReset)
+    return () => window.removeEventListener('data_reset', handleDataReset)
+  }, [])
+
   // Synchronize products, chicken cuts, and sales with Supabase on start
   useEffect(() => {
     if (!isAuthenticated || !storageAdapter.isSupabase()) return

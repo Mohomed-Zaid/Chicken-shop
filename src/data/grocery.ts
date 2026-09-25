@@ -27,7 +27,6 @@ export interface GroceryProduct {
 }
 
 const key = 'grocery-products'
-const now = () => new Date().toISOString()
 
 export const categories = [
   'Grocery',
@@ -42,30 +41,7 @@ export const categories = [
   'Other',
 ]
 
-export const demo: GroceryProduct[] = [
-  ['Sugar 1kg', 'Grocery', '4790012345678', 220, 250, 50, 10, '100'],
-  ['Milk Powder', 'Dairy', '4790012345679', 1000, 1200, 20, 5, '101'],
-  ['Biscuits', 'Biscuits', '4790012345680', 100, 150, 100, 20, '102'],
-  ['Rice 5kg', 'Rice', '4790012345681', 1200, 1400, 15, 5, '103'],
-].map(([name, category, barcode, costPrice, sellingPrice, stockQuantity, lowStockLevel, code], i) => ({
-  id: `grocery-${i + 1}`,
-  code: code as string,
-  name: name as string,
-  category: category as string,
-  barcode: barcode as string,
-  costPrice: costPrice as number,
-  sellingPrice: sellingPrice as number,
-  retailPrice: sellingPrice as number,
-  wholesaleEnabled: false,
-  wholesalePrice: null,
-  wholesaleMinQuantity: null,
-  stockQuantity: stockQuantity as number,
-  lowStockLevel: lowStockLevel as number,
-  unit: 'Piece',
-  active: true,
-  createdAt: now(),
-  updatedAt: now(),
-}))
+export const demo: GroceryProduct[] = []
 
 /**
  * Calculates the next available grocery code starting from 100.
