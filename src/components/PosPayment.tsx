@@ -1137,6 +1137,7 @@ export function PosPayment({
   const [tab, setTab] = useState<'Chicken' | 'Grocery'>('Chicken')
   const [sellingMode, setSellingMode] = useState<SellingMode>('RETAIL')
   const [groceryCategory, setGroceryCategory] = useState<string>('All')
+  const [mobilePosTab, setMobilePosTab] = useState<'catalog' | 'cart'>('catalog')
   const [selected, setSelected] = useState<ChickenItem | null>(null)
   const [grams, setGrams] = useState('')
   const [cart, setCart] = useState<Cart[]>([])
@@ -2380,9 +2381,38 @@ export function PosPayment({
       {/* Top Header */}
       <PosLiveHeader />
 
+      {/* MOBILE VIEW TOGGLE TABS (Visible <= 900px) */}
+      <div className="pos-mobile-nav-tabs">
+        <button
+          type="button"
+          className={`pos-mobile-nav-tab ${mobilePosTab === 'catalog' ? 'active' : ''}`}
+          onClick={() => setMobilePosTab('catalog')}
+        >
+          <span>📦 Products Catalog</span>
+        </button>
+        <button
+          type="button"
+          className={`pos-mobile-nav-tab ${mobilePosTab === 'cart' ? 'active' : ''}`}
+          onClick={() => setMobilePosTab('cart')}
+        >
+          <span>🛒 Current Bill</span>
+          {cart.length > 0 && <span className="pos-mobile-cart-badge">{cart.length}</span>}
+          {cart.length > 0 && <span className="pos-mobile-cart-total">{formatMoney(total)}</span>}
+        </button>
+      </div>
+
       <div className="pos-main-container">
         {/* LEFT COLUMN: CURRENT BILL / CART */}
-        <section className="pos-cart-panel">
+        <section className={`pos-cart-panel ${mobilePosTab === 'cart' ? 'mobile-show' : 'mobile-hide'}`}>
+          <div className="pos-mobile-catalog-toggle-row">
+            <button
+              type="button"
+              className="pos-mobile-back-catalog-btn"
+              onClick={() => setMobilePosTab('catalog')}
+            >
+              ← Add More Items from Catalog
+            </button>
+          </div>
           <header className="pos-bill-header">
             <div className="bill-header-info">
               <small>CURRENT BILL</small>
@@ -2967,7 +2997,7 @@ export function PosPayment({
         </section>
 
         {/* RIGHT COLUMN: CATALOG (CHICKEN / GROCERY) */}
-        <section className="pos-catalog-panel">
+        <section className={`pos-catalog-panel ${mobilePosTab === 'catalog' ? 'mobile-show' : 'mobile-hide'}`}>
           {sellingMode === 'WHOLESALE' && (
             <div
               style={{
@@ -3248,6 +3278,25 @@ export function PosPayment({
           </div>
         </section>
       </div>
+
+      {/* MOBILE FLOATING QUICK CART BAR (Visible in catalog view when cart has items) */}
+      {mobilePosTab === 'catalog' && cart.length > 0 && (
+        <div
+          className="pos-mobile-floating-cart"
+          onClick={() => setMobilePosTab('cart')}
+        >
+          <div className="pos-mobile-floating-cart-left">
+            <span className="pos-mobile-floating-cart-badge">{cart.length}</span>
+            <div className="pos-mobile-floating-cart-text">
+              <strong>{cart.length} {cart.length === 1 ? 'item' : 'items'} in bill</strong>
+              <small>{formatMoney(total)}</small>
+            </div>
+          </div>
+          <button type="button" className="pos-mobile-floating-cart-action">
+            View Bill &amp; Pay →
+          </button>
+        </div>
+      )}
 
       {/* WEIGHT SELECTION MODAL */}
       {selected && (

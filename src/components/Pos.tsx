@@ -139,6 +139,16 @@ function CreditCardIcon() {
   )
 }
 
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  )
+}
+
 export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: { active: Page; onNavigate: (page: Page) => void; profile: UserProfile | null; onLogout: () => Promise<void>; isAdmin: boolean }) {
   const pages: [Page, React.ReactNode][] = isAdmin
     ? [
@@ -167,6 +177,7 @@ export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: {
   const [customers, setCustomers] = useState<Customer[]>(() => customerStore.getCustomers())
   const [payingCustomer, setPayingCustomer] = useState<Customer | null>(null)
   const [isDuesExpanded, setIsDuesExpanded] = useState(false) // Default collapsed to save vertical space
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('sidebar_collapsed') === 'true'
@@ -194,10 +205,13 @@ export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: {
         e.preventDefault()
         toggleCollapsed()
       }
+      if (e.key === 'Escape' && mobileDrawerOpen) {
+        setMobileDrawerOpen(false)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [mobileDrawerOpen])
 
   const reloadCustomers = useCallback(() => {
     setCustomers(customerStore.getCustomers())
@@ -230,198 +244,176 @@ export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: {
   }, [dueCustomers])
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="brand">
-        <div
-          className="brand-left"
-          onClick={() => onNavigate('Dashboard')}
-          title="Go to Dashboard"
-        >
-          <img
-            src="/logo2.jpeg"
-            alt="Logo"
-            className="brand-logo-img"
-          />
-          {!collapsed && (
-            <div className="brand-text">
-              <strong className="brand-name">Chicken Kade</strong>
-              <span className="brand-pos-badge">POS SYSTEM</span>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="sidebar-collapse-btn"
-          onClick={toggleCollapsed}
-          title={collapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
-          aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{
-              transform: collapsed ? 'rotate(180deg)' : 'none',
-              transition: 'transform 0.2s ease',
-            }}
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-      </div>
-
-      <div style={{ padding: collapsed ? '0 4px 10px' : '0 10px 12px' }}>
-        <ConnectionIndicator />
-      </div>
-
-      <nav>
-        {pages.map(([page, icon]) => (
-          <button
-            className={active === page ? 'nav active' : 'nav'}
-            onClick={() => onNavigate(page)}
-            key={page}
-            title={`${page}${active === page ? ' (Active)' : ''}`}
-            data-tooltip={page}
-          >
-            <i>{icon}</i>
-            {!collapsed && <span>{page}</span>}
-          </button>
-        ))}
-      </nav>
-
-      {/* CUSTOMER DUES SECTION */}
-      {collapsed ? (
-        <div
-          className="sidebar-dues-collapsed-btn"
-          onClick={() => onNavigate('Customers')}
-          title={`Customer Dues: ${dueCustomers.length} pending (${formatMoney(totalDues)}) - Click to manage`}
-          data-tooltip={`Dues: ${formatMoney(totalDues)}`}
-        >
-          <CreditCardIcon />
-          {dueCustomers.length > 0 && (
-            <span className="sidebar-dues-badge-mini">{dueCustomers.length}</span>
-          )}
-        </div>
-      ) : (
-        <div className="sidebar-dues-section">
+    <>
+      {/* DESKTOP SIDEBAR */}
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <div className="brand">
           <div
-            className="sidebar-dues-header"
-            onClick={() => setIsDuesExpanded(prev => !prev)}
-            title={isDuesExpanded ? 'Collapse Customer Dues' : 'Expand Customer Dues'}
+            className="brand-left"
+            onClick={() => onNavigate('Dashboard')}
+            title="Go to Dashboard"
           >
-            <div className="sidebar-dues-title">
-              <CreditCardIcon />
-              <span>Customer Dues</span>
-              {dueCustomers.length > 0 && (
-                <span className="sidebar-dues-badge">{dueCustomers.length}</span>
-              )}
-            </div>
-            <div className="sidebar-dues-header-right">
-              {dueCustomers.length > 0 && (
-                <span className="sidebar-dues-total">{formatMoney(totalDues)}</span>
-              )}
-              <span className="sidebar-dues-toggle">{isDuesExpanded ? '▾' : '▸'}</span>
-            </div>
-          </div>
-
-          {isDuesExpanded && (
-            <div className="sidebar-dues-content">
-              {dueCustomers.length === 0 ? (
-                <div className="sidebar-dues-empty">
-                  <span className="sidebar-dues-empty-icon">✓</span>
-                  <small>No pending customer dues</small>
-                </div>
-              ) : (
-                <div className="sidebar-dues-list">
-                  {dueCustomers.slice(0, 5).map(({ customer, outstanding }) => (
-                    <div
-                      key={customer.id}
-                      className="sidebar-due-card"
-                      onClick={() => setPayingCustomer(customer)}
-                      title={`Click to receive payment for ${customer.name} (Due: ${formatMoney(outstanding)})`}
-                    >
-                      <div className="sidebar-due-info">
-                        <strong className="sidebar-due-name">{customer.name}</strong>
-                        <span className="sidebar-due-amount">{formatMoney(outstanding)}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="sidebar-due-pay-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setPayingCustomer(customer)
-                        }}
-                        title={`Receive payment for ${customer.name}`}
-                      >
-                        PAY
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="sidebar-view-all-link"
-                    onClick={() => onNavigate('Customers')}
-                  >
-                    View All Customers ({dueCustomers.length}) →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {!collapsed && (
-        <div style={{ padding: '8px 10px 0' }}>
-          <InstallAppButton />
-        </div>
-      )}
-
-      {collapsed ? (
-        <footer className="sidebar-footer-collapsed">
-          <div
-            className="sidebar-user-avatar"
-            title={`${profile?.full_name || 'Cashier'} (${profile?.role?.toUpperCase() || 'USER'})`}
-            data-tooltip={`${profile?.full_name || 'User'} (${profile?.role?.toUpperCase() || 'USER'})`}
-          >
-            {(profile?.full_name || 'U').charAt(0).toUpperCase()}
-            <span className="sidebar-status-dot" />
+            <img
+              src="/logo2.jpeg"
+              alt="Logo"
+              className="brand-logo-img"
+            />
+            {!collapsed && (
+              <div className="brand-text">
+                <strong className="brand-name">Chicken Kade</strong>
+                <span className="brand-pos-badge">POS SYSTEM</span>
+              </div>
+            )}
           </div>
           <button
             type="button"
-            className="sidebar-logout-icon-btn"
-            onClick={() => void onLogout()}
-            title="Sign Out"
-            data-tooltip="Sign Out"
+            className="sidebar-collapse-btn"
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
+            aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transform: collapsed ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s ease',
+              }}
+            >
+              <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-        </footer>
-      ) : (
-        <footer className="sidebar-footer-expanded">
-          <div className="sidebar-user-card">
-            <div className="sidebar-user-avatar">
+        </div>
+
+        <div style={{ padding: collapsed ? '0 4px 10px' : '0 10px 12px' }}>
+          <ConnectionIndicator />
+        </div>
+
+        <nav>
+          {pages.map(([page, icon]) => (
+            <button
+              className={active === page ? 'nav active' : 'nav'}
+              onClick={() => onNavigate(page)}
+              key={page}
+              title={`${page}${active === page ? ' (Active)' : ''}`}
+              data-tooltip={page}
+            >
+              <i>{icon}</i>
+              {!collapsed && <span>{page}</span>}
+            </button>
+          ))}
+        </nav>
+
+        {/* CUSTOMER DUES SECTION */}
+        {collapsed ? (
+          <div
+            className="sidebar-dues-collapsed-btn"
+            onClick={() => onNavigate('Customers')}
+            title={`Customer Dues: ${dueCustomers.length} pending (${formatMoney(totalDues)}) - Click to manage`}
+            data-tooltip={`Dues: ${formatMoney(totalDues)}`}
+          >
+            <CreditCardIcon />
+            {dueCustomers.length > 0 && (
+              <span className="sidebar-dues-badge-mini">{dueCustomers.length}</span>
+            )}
+          </div>
+        ) : (
+          <div className="sidebar-dues-section">
+            <div
+              className="sidebar-dues-header"
+              onClick={() => setIsDuesExpanded(prev => !prev)}
+              title={isDuesExpanded ? 'Collapse Customer Dues' : 'Expand Customer Dues'}
+            >
+              <div className="sidebar-dues-title">
+                <CreditCardIcon />
+                <span>Customer Dues</span>
+                {dueCustomers.length > 0 && (
+                  <span className="sidebar-dues-badge">{dueCustomers.length}</span>
+                )}
+              </div>
+              <div className="sidebar-dues-header-right">
+                {dueCustomers.length > 0 && (
+                  <span className="sidebar-dues-total">{formatMoney(totalDues)}</span>
+                )}
+                <span className="sidebar-dues-toggle">{isDuesExpanded ? '▾' : '▸'}</span>
+              </div>
+            </div>
+
+            {isDuesExpanded && (
+              <div className="sidebar-dues-content">
+                {dueCustomers.length === 0 ? (
+                  <div className="sidebar-dues-empty">
+                    <span className="sidebar-dues-empty-icon">✓</span>
+                    <small>No pending customer dues</small>
+                  </div>
+                ) : (
+                  <div className="sidebar-dues-list">
+                    {dueCustomers.slice(0, 5).map(({ customer, outstanding }) => (
+                      <div
+                        key={customer.id}
+                        className="sidebar-due-card"
+                        onClick={() => setPayingCustomer(customer)}
+                        title={`Click to receive payment for ${customer.name} (Due: ${formatMoney(outstanding)})`}
+                      >
+                        <div className="sidebar-due-info">
+                          <strong className="sidebar-due-name">{customer.name}</strong>
+                          <span className="sidebar-due-amount">{formatMoney(outstanding)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="sidebar-due-pay-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPayingCustomer(customer)
+                          }}
+                          title={`Receive payment for ${customer.name}`}
+                        >
+                          PAY
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="sidebar-view-all-link"
+                      onClick={() => onNavigate('Customers')}
+                    >
+                      View All Customers ({dueCustomers.length}) →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!collapsed && (
+          <div style={{ padding: '8px 10px 0' }}>
+            <InstallAppButton />
+          </div>
+        )}
+
+        {collapsed ? (
+          <footer className="sidebar-footer-collapsed">
+            <div
+              className="sidebar-user-avatar"
+              title={`${profile?.full_name || 'Cashier'} (${profile?.role?.toUpperCase() || 'USER'})`}
+              data-tooltip={`${profile?.full_name || 'User'} (${profile?.role?.toUpperCase() || 'USER'})`}
+            >
               {(profile?.full_name || 'U').charAt(0).toUpperCase()}
               <span className="sidebar-status-dot" />
             </div>
-            <div className="sidebar-user-info">
-              <strong className="sidebar-user-name">{profile?.full_name || 'Cashier'}</strong>
-              <span className="sidebar-user-role">{profile?.role?.toUpperCase() || 'USER'}</span>
-            </div>
             <button
               type="button"
-              className="sidebar-logout-btn"
+              className="sidebar-logout-icon-btn"
               onClick={() => void onLogout()}
               title="Sign Out"
+              data-tooltip="Sign Out"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -429,9 +421,217 @@ export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: {
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </button>
+          </footer>
+        ) : (
+          <footer className="sidebar-footer-expanded">
+            <div className="sidebar-user-card">
+              <div className="sidebar-user-avatar">
+                {(profile?.full_name || 'U').charAt(0).toUpperCase()}
+                <span className="sidebar-status-dot" />
+              </div>
+              <div className="sidebar-user-info">
+                <strong className="sidebar-user-name">{profile?.full_name || 'Cashier'}</strong>
+                <span className="sidebar-user-role">{profile?.role?.toUpperCase() || 'USER'}</span>
+              </div>
+              <button
+                type="button"
+                className="sidebar-logout-btn"
+                onClick={() => void onLogout()}
+                title="Sign Out"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </div>
+          </footer>
+        )}
+      </aside>
+
+      {/* MOBILE TOP HEADER BAR (Visible <= 768px) */}
+      <header className="mobile-top-header">
+        <button
+          type="button"
+          className="mobile-hamburger-btn"
+          onClick={() => setMobileDrawerOpen(true)}
+          aria-label="Open Navigation Menu"
+        >
+          <MenuIcon />
+        </button>
+        <div
+          className="mobile-header-brand"
+          onClick={() => onNavigate('Dashboard')}
+        >
+          <img src="/logo2.jpeg" alt="Logo" className="mobile-brand-img" />
+          <div className="mobile-header-titles">
+            <span className="mobile-brand-name">Chicken Kade</span>
+            <span className="mobile-page-badge">{active}</span>
           </div>
-        </footer>
+        </div>
+        <div className="mobile-header-actions">
+          <ConnectionIndicator />
+          <div
+            className="mobile-user-avatar"
+            onClick={() => setMobileDrawerOpen(true)}
+            title={profile?.full_name || 'User'}
+          >
+            {(profile?.full_name || 'U').charAt(0).toUpperCase()}
+          </div>
+        </div>
+      </header>
+
+      {/* MOBILE SLIDE-OUT DRAWER */}
+      {mobileDrawerOpen && (
+        <div
+          className="mobile-drawer-overlay"
+          onClick={() => setMobileDrawerOpen(false)}
+        >
+          <div
+            className="mobile-drawer"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mobile-drawer-header">
+              <div className="mobile-drawer-brand">
+                <img src="/logo2.jpeg" alt="Logo" className="mobile-drawer-logo" />
+                <div>
+                  <strong className="mobile-drawer-title">Chicken Kade</strong>
+                  <span className="brand-pos-badge">POS SYSTEM</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="mobile-drawer-close"
+                onClick={() => setMobileDrawerOpen(false)}
+                aria-label="Close Menu"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mobile-drawer-user">
+              <div className="sidebar-user-avatar">
+                {(profile?.full_name || 'U').charAt(0).toUpperCase()}
+                <span className="sidebar-status-dot" />
+              </div>
+              <div className="mobile-drawer-user-info">
+                <strong>{profile?.full_name || 'Cashier'}</strong>
+                <span className="sidebar-user-role">{profile?.role?.toUpperCase() || 'USER'}</span>
+              </div>
+            </div>
+
+            {/* Customer Dues in Drawer */}
+            {dueCustomers.length > 0 && (
+              <div className="mobile-drawer-dues-card">
+                <div className="mobile-drawer-dues-row">
+                  <span>Customer Dues ({dueCustomers.length})</span>
+                  <strong style={{ color: '#f87171' }}>{formatMoney(totalDues)}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="mobile-drawer-dues-btn"
+                  onClick={() => {
+                    onNavigate('Customers')
+                    setMobileDrawerOpen(false)
+                  }}
+                >
+                  View &amp; Collect Dues →
+                </button>
+              </div>
+            )}
+
+            <div className="mobile-drawer-nav">
+              {pages.map(([p, icon]) => (
+                <button
+                  key={p}
+                  className={`mobile-drawer-item ${active === p ? 'active' : ''}`}
+                  onClick={() => {
+                    onNavigate(p)
+                    setMobileDrawerOpen(false)
+                  }}
+                >
+                  <i>{icon}</i>
+                  <span>{p}</span>
+                  {active === p && <span className="mobile-drawer-active-indicator" />}
+                </button>
+              ))}
+            </div>
+
+            <div className="mobile-drawer-footer">
+              <InstallAppButton />
+              <button
+                type="button"
+                className="mobile-drawer-logout-btn"
+                onClick={() => {
+                  setMobileDrawerOpen(false)
+                  void onLogout()
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR (Visible <= 768px) */}
+      <nav className="mobile-bottom-nav">
+        <button
+          type="button"
+          className={`mobile-bottom-nav-btn ${active === 'POS' ? 'active' : ''}`}
+          onClick={() => onNavigate('POS')}
+        >
+          <PosIcon />
+          <span>POS</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-bottom-nav-btn ${active === 'Dashboard' ? 'active' : ''}`}
+          onClick={() => onNavigate('Dashboard')}
+        >
+          <DashboardIcon />
+          <span>Dashboard</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-bottom-nav-btn ${active === 'Sales' ? 'active' : ''}`}
+          onClick={() => onNavigate('Sales')}
+        >
+          <SalesIcon />
+          <span>Sales</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-bottom-nav-btn ${active === 'Customers' ? 'active' : ''}`}
+          onClick={() => onNavigate('Customers')}
+        >
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <CustomersIcon />
+            {dueCustomers.length > 0 && (
+              <span className="mobile-bottom-nav-badge">{dueCustomers.length}</span>
+            )}
+          </div>
+          <span>Customers</span>
+        </button>
+
+        <button
+          type="button"
+          className="mobile-bottom-nav-btn"
+          onClick={() => setMobileDrawerOpen(true)}
+        >
+          <MenuIcon />
+          <span>Menu</span>
+        </button>
+      </nav>
 
       {/* QUICK CUSTOMER PAYMENT MODAL */}
       {payingCustomer && (
@@ -445,7 +645,7 @@ export function Navigation({ active, onNavigate, profile, onLogout, isAdmin }: {
           }}
         />
       )}
-    </aside>
+    </>
   )
 }
 
