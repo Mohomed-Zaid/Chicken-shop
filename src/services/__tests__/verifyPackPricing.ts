@@ -29,7 +29,6 @@ const mockStorage: Record<string, string> = {}
 import {
   calculatePackPrice,
   resolveGroceryItemPricing,
-  getProductPackRules,
 } from '../pricingService'
 import type { GroceryProduct, ProductPackPrice } from '../../data/grocery'
 import { salesStore, type Sale, type SaleItem } from '../../data/records'
