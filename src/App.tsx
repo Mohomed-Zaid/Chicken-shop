@@ -18,8 +18,8 @@ import { SubscriptionBanner } from './components/SubscriptionBanner'
 import { PwaUpdatePrompt, PwaInstallPrompt } from './components/PwaManager'
 import { useAuth } from './context/AuthContext'
 import { useSubscription } from './context/SubscriptionContext'
-import { chickenStore, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
-import { groceryStore, ensureGroceryCodes, type GroceryProduct } from './data/grocery'
+import { chickenStore, sortChickenItems, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
+import { groceryStore, ensureGroceryCodes, sortGroceryProducts, type GroceryProduct } from './data/grocery'
 import { storageAdapter } from './services/storageAdapter'
 import { Sales } from './components/Sales'
 import { Customers } from './components/Customers'
@@ -116,7 +116,7 @@ export default function App() {
         }
 
         if (cloudProducts && cloudProducts.length > 0) {
-          const withCodes = ensureGroceryCodes(cloudProducts)
+          const withCodes = sortGroceryProducts(ensureGroceryCodes(cloudProducts))
           setGrocery(withCodes)
           groceryStore.save(withCodes)
         } else {
@@ -128,8 +128,9 @@ export default function App() {
         }
 
         if (cloudCuts && cloudCuts.length > 0) {
-          setItems(cloudCuts)
-          chickenStore.saveItems(cloudCuts)
+          const sortedCuts = sortChickenItems(cloudCuts)
+          setItems(sortedCuts)
+          chickenStore.saveItems(sortedCuts)
         } else {
           // Supabase chicken_cuts table is empty: seed with local cuts
           const localCuts = chickenStore.loadItems()
@@ -175,10 +176,11 @@ export default function App() {
   }
 
   const commitItems = (next: ChickenItem[]) => {
-    setItems(next)
-    chickenStore.saveItems(next)
+    const sorted = sortChickenItems(next)
+    setItems(sorted)
+    chickenStore.saveItems(sorted)
     if (storageAdapter.isSupabase()) {
-      saveChickenCuts(next).catch(console.error)
+      saveChickenCuts(sorted).catch(console.error)
     }
   }
 

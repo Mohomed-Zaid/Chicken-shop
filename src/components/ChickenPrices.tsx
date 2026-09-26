@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { formatMoney, normalizeChickenCode, type ChickenItem, type PriceHistoryEntry } from '../data/chicken'
+import { formatMoney, normalizeChickenCode, sortChickenItems, type ChickenItem, type PriceHistoryEntry } from '../data/chicken'
 
 type EditorProps = {
   item?: ChickenItem
@@ -150,8 +150,9 @@ export function DailyChickenPrices({
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return items
-    return items.filter(item => {
+    const sorted = sortChickenItems(items)
+    if (!q) return sorted
+    return sorted.filter(item => {
       const code = (item.code || '').toLowerCase()
       const name = (item.name || '').toLowerCase()
       const cut = (item.cut || '').toLowerCase()

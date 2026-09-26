@@ -1,4 +1,4 @@
-import type { GroceryProduct, ProductPackPrice } from '../../data/grocery'
+import { sortGroceryProducts, type GroceryProduct, type ProductPackPrice } from '../../data/grocery'
 import { listRows, upsertRows, deleteRow } from './clientHelpers'
 
 export type ProductPackPriceRow = {
@@ -136,7 +136,7 @@ export const getProducts = async (): Promise<GroceryProduct[]> => {
     packMap.set(pr.product_id, list)
   }
 
-  return rows.map(row => rowToProduct(row, packMap.get(row.id) || []))
+  return sortGroceryProducts(rows.map(row => rowToProduct(row, packMap.get(row.id) || [])))
 }
 
 export const saveProducts = async (products: GroceryProduct[]) => {

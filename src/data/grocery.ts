@@ -138,6 +138,32 @@ export const ensureGroceryCodes = (products: GroceryProduct[]): GroceryProduct[]
   })
 }
 
+export const compareGroceryProducts = (a: GroceryProduct, b: GroceryProduct): number => {
+  const codeA = (a.code || '').trim()
+  const codeB = (b.code || '').trim()
+
+  if (codeA && codeB) {
+    const numA = Number(codeA)
+    const numB = Number(codeB)
+    if (!isNaN(numA) && !isNaN(numB)) {
+      if (numA !== numB) return numA - numB
+    } else {
+      const cmp = codeA.localeCompare(codeB, undefined, { numeric: true })
+      if (cmp !== 0) return cmp
+    }
+  } else if (codeA) {
+    return -1
+  } else if (codeB) {
+    return 1
+  }
+
+  return (a.name || '').localeCompare(b.name || '')
+}
+
+export const sortGroceryProducts = (products: GroceryProduct[]): GroceryProduct[] => {
+  return [...products].sort(compareGroceryProducts)
+}
+
 export const groceryStore = {
   load: (): GroceryProduct[] => {
     try {
@@ -152,7 +178,7 @@ export const groceryStore = {
         packPricingEnabled: Boolean(p.packPricingEnabled),
         packPrices: Array.isArray(p.packPrices) ? p.packPrices : [],
       }))
-      const withCodes = ensureGroceryCodes(normalized)
+      const withCodes = sortGroceryProducts(ensureGroceryCodes(normalized))
       if (JSON.stringify(parsed) !== JSON.stringify(withCodes)) {
         try {
           localStorage.setItem(key, JSON.stringify(withCodes))
@@ -166,7 +192,7 @@ export const groceryStore = {
     }
   },
   save: (items: GroceryProduct[]) => {
-    const withCodes = ensureGroceryCodes(items)
+    const withCodes = sortGroceryProducts(ensureGroceryCodes(items))
     localStorage.setItem(key, JSON.stringify(withCodes))
   },
 }

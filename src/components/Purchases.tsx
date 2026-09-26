@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { formatMoney, type ChickenItem, defaultChickenItems } from '../data/chicken'
+import { formatMoney, sortChickenItems, type ChickenItem, defaultChickenItems } from '../data/chicken'
 import { groceryStore, type GroceryProduct } from '../data/grocery'
 import {
   purchaseStore,
@@ -286,7 +286,7 @@ function PurchaseEditor({
   onCompleted: (purchase: Purchase) => void
 }) {
   const [itemType, setItemType] = useState<'chicken' | 'grocery'>('chicken')
-  const [chickenItems] = useState<ChickenItem[]>(chickenItemsList)
+  const [chickenItems] = useState<ChickenItem[]>(() => sortChickenItems(chickenItemsList))
   const [products] = useState<GroceryProduct[]>(availableProducts)
 
   const [supplierId, setSupplierId] = useState('')

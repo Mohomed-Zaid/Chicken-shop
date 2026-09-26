@@ -96,6 +96,32 @@ export const findChickenByCode = (query: string, items: ChickenItem[]): ChickenI
   return null
 }
 
+export const compareChickenCuts = (a: ChickenItem, b: ChickenItem): number => {
+  const codeA = (a.code || defaultCodeMapping[a.id] || '').trim()
+  const codeB = (b.code || defaultCodeMapping[b.id] || '').trim()
+
+  if (codeA && codeB) {
+    const numA = Number(codeA)
+    const numB = Number(codeB)
+    if (!isNaN(numA) && !isNaN(numB)) {
+      if (numA !== numB) return numA - numB
+    } else {
+      const cmp = codeA.localeCompare(codeB, undefined, { numeric: true })
+      if (cmp !== 0) return cmp
+    }
+  } else if (codeA) {
+    return -1
+  } else if (codeB) {
+    return 1
+  }
+
+  return (a.name || '').localeCompare(b.name || '')
+}
+
+export const sortChickenItems = (items: ChickenItem[]): ChickenItem[] => {
+  return [...items].sort(compareChickenCuts)
+}
+
 const migrateItemsWithCodes = (items: ChickenItem[]): ChickenItem[] => {
   let changed = false
   const updated = items.map((item, index) => {
@@ -130,7 +156,7 @@ const fromStorage = <T,>(key: string, fallback: T): T => {
 export const chickenStore = {
   loadItems: (): ChickenItem[] => {
     const raw = fromStorage<ChickenItem[]>(priceKey, defaultChickenItems)
-    return migrateItemsWithCodes(raw)
+    return sortChickenItems(migrateItemsWithCodes(raw))
   },
   saveItems: (items: ChickenItem[]) => localStorage.setItem(priceKey, JSON.stringify(items)),
   loadHistory: () => fromStorage<PriceHistoryEntry[]>(historyKey, []),

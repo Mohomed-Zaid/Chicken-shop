@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { categories, getNextGroceryCode, type GroceryProduct, type ProductPackPrice } from '../data/grocery'
+import { categories, getNextGroceryCode, sortGroceryProducts, type GroceryProduct, type ProductPackPrice } from '../data/grocery'
 import { formatMoney } from '../data/chicken'
 import { storageAdapter } from '../services/storageAdapter'
 import { saveProducts } from '../services/supabase/productService'
@@ -42,21 +42,23 @@ export function Products({
   const wholesaleCount = items.filter(i => i.wholesaleEnabled && i.wholesalePrice && Number(i.wholesalePrice) > 0).length
   const retailOnlyCount = items.length - wholesaleCount
 
-  const list = items.filter(item => {
-    const matchesQuery =
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      item.barcode.toLowerCase().includes(query.toLowerCase()) ||
-      (item.code && item.code.toLowerCase().includes(query.toLowerCase()))
-    if (!matchesQuery) return false
+  const list = sortGroceryProducts(
+    items.filter(item => {
+      const matchesQuery =
+        item.name.toLowerCase().includes(query.toLowerCase()) ||
+        item.barcode.toLowerCase().includes(query.toLowerCase()) ||
+        (item.code && item.code.toLowerCase().includes(query.toLowerCase()))
+      if (!matchesQuery) return false
 
-    if (pricingFilter === 'WHOLESALE') {
-      return Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
-    }
-    if (pricingFilter === 'RETAIL_ONLY') {
-      return !Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
-    }
-    return true
-  })
+      if (pricingFilter === 'WHOLESALE') {
+        return Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
+      }
+      if (pricingFilter === 'RETAIL_ONLY') {
+        return !Boolean(item.wholesaleEnabled && item.wholesalePrice && Number(item.wholesalePrice) > 0)
+      }
+      return true
+    })
+  )
 
   return (
     <section className="prices-page">

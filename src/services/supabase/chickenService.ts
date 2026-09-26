@@ -1,4 +1,4 @@
-import type { ChickenItem } from '../../data/chicken'
+import { sortChickenItems, type ChickenItem } from '../../data/chicken'
 import { listRows, upsertRows } from './clientHelpers'
 
 export type ChickenCutRow = {
@@ -45,7 +45,7 @@ export const chickenItemToRow = (item: ChickenItem): ChickenCutRow => ({
 
 export const getChickenCuts = async (): Promise<ChickenItem[]> => {
   const rows = await listRows<ChickenCutRow>('chicken_cuts')
-  return rows.map(rowToChickenItem)
+  return sortChickenItems(rows.map(rowToChickenItem))
 }
 
 export const getChickenPriceHistory = () => listRows<ChickenPriceHistoryRow>('chicken_price_history')

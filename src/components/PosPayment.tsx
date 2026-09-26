@@ -6,6 +6,7 @@ import {
   parseWeightInGrams,
   formatWeightDisplay,
   chickenStore,
+  compareChickenCuts,
   type ChickenCartItem,
   type ChickenItem,
 } from '../data/chicken'
@@ -2527,11 +2528,11 @@ export function PosPayment({
         return getSearchScore(cleanChickenSearch, item.name, item.code, item.cut) >= 0
       })
       .sort((a, b) => {
-        if (!cleanChickenSearch) return a.name.localeCompare(b.name)
+        if (!cleanChickenSearch) return compareChickenCuts(a, b)
         const scoreA = getSearchScore(cleanChickenSearch, a.name, a.code, a.cut)
         const scoreB = getSearchScore(cleanChickenSearch, b.name, b.code, b.cut)
         if (scoreA !== scoreB) return scoreA - scoreB
-        return a.name.localeCompare(b.name)
+        return compareChickenCuts(a, b)
       })
   }, [chickenItems, cleanChickenSearch])
 
