@@ -290,7 +290,7 @@ export default function App() {
         {denied ? (
           <AccessDenied />
         ) : page === 'POS' ? (
-          <PosPayment chickenItems={items} groceryItems={grocery} onStockChange={saveGrocery} />
+          <PosPayment chickenItems={items} groceryItems={grocery} onStockChange={saveGrocery} onChickenChange={commitItems} />
         ) : page === 'Sales' ? (
           <Sales />
         ) : page === 'Inventory' ? (

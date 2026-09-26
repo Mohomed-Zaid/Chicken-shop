@@ -396,4 +396,22 @@ export const completeSaleAtomically = async (
   }
 }
 
+export const deleteSaleFromSupabase = async (saleId: string): Promise<boolean> => {
+  try {
+    const db = requireSupabase()
+    // 1. Delete associated sale items first if any
+    await db.from('sale_items').delete().eq('sale_id', saleId)
+    // 2. Delete parent sale row
+    const { error } = await db.from('sales').delete().eq('id', saleId)
+    if (error) {
+      console.warn('Supabase delete sale error:', error)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Supabase delete sale exception:', err)
+    return false
+  }
+}
+
 

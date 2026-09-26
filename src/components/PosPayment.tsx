@@ -5,6 +5,7 @@ import {
   findChickenByCode,
   parseWeightInGrams,
   formatWeightDisplay,
+  chickenStore,
   type ChickenCartItem,
   type ChickenItem,
 } from '../data/chicken'
@@ -1131,10 +1132,12 @@ export function PosPayment({
   chickenItems,
   groceryItems,
   onStockChange,
+  onChickenChange,
 }: {
   chickenItems: ChickenItem[]
   groceryItems: GroceryProduct[]
   onStockChange: (items: GroceryProduct[]) => void
+  onChickenChange?: (items: ChickenItem[]) => void
 }) {
   const { profile } = useAuth()
   const [tab, setTab] = useState<'Chicken' | 'Grocery'>('Chicken')
@@ -1143,6 +1146,12 @@ export function PosPayment({
   const [mobilePosTab, setMobilePosTab] = useState<'catalog' | 'cart'>('catalog')
   const [selected, setSelected] = useState<ChickenItem | null>(null)
   const [grams, setGrams] = useState('')
+  const [rateInput, setRateInput] = useState('')
+  const [isCustomRateApplied, setIsCustomRateApplied] = useState(false)
+  const [savePermanently, setSavePermanently] = useState(false)
+  const [editingCartChickenRateId, setEditingCartChickenRateId] = useState<string | null>(null)
+  const [editingCartRateValue, setEditingCartRateValue] = useState<string>('')
+  const weightInputRef = useRef<HTMLInputElement>(null)
   const [cart, setCart] = useState<Cart[]>([])
   const [scan, setScan] = useState('')
   const [search, setSearch] = useState('')
@@ -1180,47 +1189,150 @@ export function PosPayment({
     | { kind: 'chicken'; item: ChickenItem }
     | { kind: 'grocery'; item: GroceryProduct }
 
+  /**
+   * Smart relevance score for POS product search.
+   * Lower score = higher priority.
+   * Return -1 if not a valid match.
+   */
+  const getSearchScore = (
+    cleanQuery: string,
+    name: string,
+    code?: string | null,
+    cut?: string | null,
+    barcode?: string | null,
+    category?: string | null
+  ): number => {
+    const q = cleanQuery.toLowerCase().trim()
+    if (!q) return -1
+
+    const qNoHash = q.replace(/^#/, '').trim()
+    const isNumeric = /^\d+$/.test(qNoHash)
+
+    const n = (name || '').toLowerCase()
+    const c = (code || '').toLowerCase().trim()
+    const cNoHash = c.replace(/^#/, '').trim()
+    const cutName = (cut || '').toLowerCase()
+    const bc = (barcode || '').toLowerCase().trim()
+
+    // 1. Exact Code Match: highest priority (Score: 0)
+    if (c && (c === q || c === qNoHash || cNoHash === qNoHash || (isNumeric && String(Number(cNoHash)) === qNoHash))) {
+      return 0
+    }
+
+    // 2. Exact Barcode Match (Score: 1)
+    if (bc && (bc === q || (isNumeric && bc.replace(/^0+/, '') === qNoHash.replace(/^0+/, '')))) {
+      return 1
+    }
+
+    // 3. Exact Name or Cut Match (Score: 2)
+    if (n === q || cutName === q) {
+      return 2
+    }
+
+    // 4. Name or Cut Starts With Query (Score: 3)
+    // e.g. "e" -> "Egg...", "f" -> "Fresh Chicken..."
+    if (n.startsWith(q) || cutName.startsWith(q)) {
+      return 3
+    }
+
+    // 5. Any Word in Name or Cut Starts With Query (Score: 4)
+    // e.g. "b" -> "Chicken Breast" ("breast" starts with b)
+    // e.g. "e" -> "Farm Fresh Eggs" ("eggs" starts with e)
+    const words = `${n} ${cutName}`.split(/[\s\-_/(),]+/).filter(Boolean)
+    if (words.some(w => w.startsWith(q))) {
+      return 4
+    }
+
+    // 6. Code Starts With Query (Score: 5)
+    if (c && (c.startsWith(q) || cNoHash.startsWith(qNoHash))) {
+      return 5
+    }
+
+    // For short queries (1 or 2 characters), STOP HERE!
+    // Do NOT match letters inside the middle of a word (e.g. typing "e" must NOT match "chick-e-n")
+    if (q.length < 3) {
+      return -1
+    }
+
+    // 7. Substring inside Name or Cut (Only for queries >= 3 characters) (Score: 6)
+    if (n.includes(q) || cutName.includes(q)) {
+      return 6
+    }
+
+    // 8. Barcode Starts With Query (Only for queries >= 3 characters) (Score: 7)
+    if (bc && bc.startsWith(q)) {
+      return 7
+    }
+
+    // 9. Category Starts With Query (Score: 8)
+    if (category && category.toLowerCase().startsWith(q)) {
+      return 8
+    }
+
+    return -1
+  }
+
   // Live suggestions across chicken cuts and grocery items
   const suggestions = useMemo<SearchSuggestion[]>(() => {
-    const clean = scan.trim().toLowerCase()
+    const rawClean = scan.trim()
+    const clean = rawClean.toLowerCase()
     if (!clean) return []
 
-    const chickenMatches: SearchSuggestion[] = chickenItems
-      .filter(
-        item =>
-          item.active &&
-          (item.name.toLowerCase().includes(clean) ||
-            item.cut.toLowerCase().includes(clean) ||
-            (item.code && item.code.toLowerCase().includes(clean)))
-      )
-      .sort((a, b) => {
-        const aStarts = a.name.toLowerCase().startsWith(clean) || a.cut.toLowerCase().startsWith(clean)
-        const bStarts = b.name.toLowerCase().startsWith(clean) || b.cut.toLowerCase().startsWith(clean)
-        if (aStarts && !bStarts) return -1
-        if (!aStarts && bStarts) return 1
-        return a.name.localeCompare(b.name)
-      })
-      .map(item => ({ kind: 'chicken', item }))
+    const cleanNoHash = clean.replace(/^#/, '').trim()
+    const isNumeric = /^\d+$/.test(cleanNoHash)
 
-    const groceryMatches: SearchSuggestion[] = groceryItems
-      .filter(
-        item =>
-          item.active &&
-          (item.name.toLowerCase().includes(clean) ||
-            item.barcode.toLowerCase().includes(clean) ||
-            (item.code && item.code.toLowerCase().includes(clean)) ||
-            (item.category && item.category.toLowerCase().includes(clean)))
-      )
-      .sort((a, b) => {
-        const aStarts = a.name.toLowerCase().startsWith(clean)
-        const bStarts = b.name.toLowerCase().startsWith(clean)
-        if (aStarts && !bStarts) return -1
-        if (!aStarts && bStarts) return 1
-        return a.name.localeCompare(b.name)
-      })
-      .map(item => ({ kind: 'grocery', item }))
+    // 1. EXACT CODE MATCH: If the search query exactly matches an item's code,
+    // return ONLY that product (e.g. searching "1" returns ONLY code 1 Fresh Chicken)
+    const exactChickenByCode = chickenItems.filter(
+      item =>
+        item.active &&
+        item.code &&
+        (item.code.toLowerCase() === clean ||
+          item.code.toLowerCase() === cleanNoHash ||
+          (isNumeric && String(Number(item.code)) === cleanNoHash))
+    )
+    const exactGroceryByCode = groceryItems.filter(
+      item =>
+        item.active &&
+        item.code &&
+        (item.code.toLowerCase() === clean ||
+          item.code.toLowerCase() === cleanNoHash ||
+          (isNumeric && String(Number(item.code)) === cleanNoHash))
+    )
 
-    return [...chickenMatches, ...groceryMatches].slice(0, 10)
+    if (exactChickenByCode.length > 0 || exactGroceryByCode.length > 0) {
+      return [
+        ...exactChickenByCode.map(item => ({ kind: 'chicken' as const, item })),
+        ...exactGroceryByCode.map(item => ({ kind: 'grocery' as const, item })),
+      ]
+    }
+
+    // 2. Score all active candidates together (both chicken & grocery)
+    const scoredMatches: Array<{ suggestion: SearchSuggestion; score: number; name: string }> = []
+
+    for (const item of chickenItems) {
+      if (!item.active) continue
+      const score = getSearchScore(clean, item.name, item.code, item.cut)
+      if (score >= 0) {
+        scoredMatches.push({ suggestion: { kind: 'chicken', item }, score, name: item.name })
+      }
+    }
+
+    for (const item of groceryItems) {
+      if (!item.active) continue
+      const score = getSearchScore(clean, item.name, item.code, null, item.barcode, item.category)
+      if (score >= 0) {
+        scoredMatches.push({ suggestion: { kind: 'grocery', item }, score, name: item.name })
+      }
+    }
+
+    // Sort strictly by relevance score ascending (best match first), then alphabetically
+    scoredMatches.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score
+      return a.name.localeCompare(b.name)
+    })
+
+    return scoredMatches.map(m => m.suggestion).slice(0, 10)
   }, [scan, chickenItems, groceryItems])
 
   // Synchronize held orders across tabs and triggers
@@ -1245,19 +1357,49 @@ export function PosPayment({
     return ['All', ...Array.from(set).sort()]
   }, [groceryItems])
 
+  const openChickenModal = (item: ChickenItem) => {
+    setSelected(item)
+    setGrams('')
+    const def =
+      sellingMode === 'WHOLESALE' && item.wholesalePricePerKg !== undefined && item.wholesalePricePerKg !== null && item.wholesalePricePerKg > 0
+        ? item.wholesalePricePerKg
+        : item.pricePerKg
+    setRateInput(String(def))
+    setIsCustomRateApplied(false)
+    setSavePermanently(false)
+  }
+
+  const closeChickenModal = () => {
+    setSelected(null)
+    setGrams('')
+    setRateInput('')
+    setIsCustomRateApplied(false)
+    setSavePermanently(false)
+  }
+
   useEffect(() => {
     if (!selected) return
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setSelected(null)
-        setGrams('')
+        closeChickenModal()
       }
     }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [selected])
 
-  const addChicken = (weightGrams: number, forcePriceType?: PriceType) => {
+  const defaultRate = selected
+    ? (sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg !== undefined && selected.wholesalePricePerKg !== null && selected.wholesalePricePerKg > 0
+        ? selected.wholesalePricePerKg
+        : selected.pricePerKg)
+    : 0
+  const parsedCustomRate = parseFloat(rateInput)
+  const isCustomRateValid = isCustomRateApplied && Number.isFinite(parsedCustomRate) && parsedCustomRate > 0 && parsedCustomRate !== defaultRate
+  const selectedEffectiveRate = Number.isFinite(parsedCustomRate) && parsedCustomRate > 0
+    ? parsedCustomRate
+    : defaultRate
+
+  const addChicken = (weightGrams: number, forcePriceType?: PriceType, customPricePerKg?: number) => {
     if (!selected) return
     const parsedWeight = Number(weightGrams)
     if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
@@ -1269,12 +1411,31 @@ export function PosPayment({
       forcePriceType === 'WHOLESALE' ||
       (forcePriceType !== 'RETAIL' &&
         sellingMode === 'WHOLESALE' &&
-        selected.wholesalePricePerKg !== undefined &&
-        selected.wholesalePricePerKg !== null &&
-        selected.wholesalePricePerKg > 0)
-    const effectivePricePerKg = isWholesale ? selected.wholesalePricePerKg! : selected.pricePerKg
+        ((selected.wholesalePricePerKg !== undefined &&
+          selected.wholesalePricePerKg !== null &&
+          selected.wholesalePricePerKg > 0) || (customPricePerKg !== undefined && customPricePerKg > 0) || isCustomRateValid))
+    const effectivePricePerKg =
+      customPricePerKg !== undefined && customPricePerKg > 0
+        ? customPricePerKg
+        : (isWholesale ? (selected.wholesalePricePerKg || selected.pricePerKg) : selected.pricePerKg)
     const priceType: PriceType = isWholesale ? 'WHOLESALE' : 'RETAIL'
     const total = calculateChickenPrice(parsedWeight, effectivePricePerKg)
+
+    if (savePermanently && selected && isCustomRateValid) {
+      const nextItems = chickenItems.map(it => {
+        if (it.id === selected.id) {
+          return {
+            ...it,
+            wholesalePricePerKg: sellingMode === 'WHOLESALE' ? effectivePricePerKg : it.wholesalePricePerKg,
+            pricePerKg: sellingMode === 'RETAIL' ? effectivePricePerKg : it.pricePerKg,
+            updatedAt: new Date().toISOString(),
+          }
+        }
+        return it
+      })
+      chickenStore.saveItems(nextItems)
+      onChickenChange?.(nextItems)
+    }
 
     setCart(current => [
       ...current,
@@ -1295,9 +1456,31 @@ export function PosPayment({
       },
     ])
 
-    setSelected(null)
-    setGrams('')
+    closeChickenModal()
     setNotice('')
+  }
+
+  const applyCartChickenRate = (cartItemId: string) => {
+    const val = parseFloat(editingCartRateValue)
+    if (!Number.isFinite(val) || val <= 0) {
+      setNotice('Please enter a valid rate per kg.')
+      setEditingCartChickenRateId(null)
+      return
+    }
+    setCart(current =>
+      current.map(i => {
+        if (i.id !== cartItemId || i.kind !== 'chicken') return i
+        const newTotal = calculateChickenPrice(i.weightGrams, val)
+        return {
+          ...i,
+          pricePerKg: val,
+          unitPrice: newTotal,
+          total: newTotal,
+        }
+      })
+    )
+    setEditingCartChickenRateId(null)
+    setNotice(`Updated rate to ${formatMoney(val)}/kg`)
   }
 
   const resolveItemPricing = (
@@ -1629,8 +1812,7 @@ export function PosPayment({
           setNotice(`Chicken #${chickenCodeMatch.code} (${chickenCodeMatch.name}) is inactive in Daily Chicken Prices.`)
           return false
         }
-        setSelected(chickenCodeMatch)
-        setGrams('')
+        openChickenModal(chickenCodeMatch)
         setScan('')
         barcodeBufferRef.current = ''
         setNotice('')
@@ -1661,8 +1843,7 @@ export function PosPayment({
         setNotice(`Chicken #${chickenFallback.code} (${chickenFallback.name}) is inactive in Daily Chicken Prices.`)
         return false
       }
-      setSelected(chickenFallback)
-      setGrams('')
+      openChickenModal(chickenFallback)
       setScan('')
       barcodeBufferRef.current = ''
       setNotice('')
@@ -1675,8 +1856,7 @@ export function PosPayment({
       item => item.active && (item.name.toLowerCase() === lowerClean || item.cut.toLowerCase() === lowerClean)
     )
     if (chickenNameMatch) {
-      setSelected(chickenNameMatch)
-      setGrams('')
+      openChickenModal(chickenNameMatch)
       setScan('')
       barcodeBufferRef.current = ''
       setNotice('')
@@ -1710,8 +1890,7 @@ export function PosPayment({
 
   const handleSelectSuggestion = (suggestion: SearchSuggestion) => {
     if (suggestion.kind === 'chicken') {
-      setSelected(suggestion.item)
-      setGrams('')
+      openChickenModal(suggestion.item)
       setScan('')
       setShowSuggestions(false)
       setHighlightedIndex(-1)
@@ -1784,8 +1963,7 @@ export function PosPayment({
     if (/^CH\d+/i.test(trimmed)) {
       const match = findChickenByCode(trimmed, chickenItems)
       if (match && match.active) {
-        setSelected(match)
-        setGrams('')
+        openChickenModal(match)
         setScan('')
         setShowSuggestions(false)
         barcodeBufferRef.current = ''
@@ -2061,8 +2239,7 @@ export function PosPayment({
           return
         }
         if (selected) {
-          setSelected(null)
-          setGrams('')
+          closeChickenModal()
           return
         }
         if (isHoldModalOpen) {
@@ -2323,28 +2500,42 @@ export function PosPayment({
     executeResume(orderToResume)
   }
 
-  const products = groceryItems.filter(
-    product =>
-      product.active &&
-      (groceryCategory === 'All' || product.category === groceryCategory) &&
-      (product.name.toLowerCase().includes(search.toLowerCase()) ||
-        product.barcode.includes(search) ||
-        (product.code && product.code.includes(search)))
-  )
-  const chickenResults = chickenItems.filter(
-    item =>
-      item.active &&
-      (item.name.toLowerCase().includes(chickenSearch.toLowerCase()) ||
-        item.cut.toLowerCase().includes(chickenSearch.toLowerCase()) ||
-        (item.code && item.code.includes(chickenSearch)))
-  )
+  const cleanGrocerySearch = search.trim().toLowerCase()
+  const products = useMemo(() => {
+    return groceryItems
+      .filter(product => {
+        if (!product.active) return false
+        if (groceryCategory !== 'All' && product.category !== groceryCategory) return false
+        if (!cleanGrocerySearch) return true
+        return getSearchScore(cleanGrocerySearch, product.name, product.code, null, product.barcode, product.category) >= 0
+      })
+      .sort((a, b) => {
+        if (!cleanGrocerySearch) return a.name.localeCompare(b.name)
+        const scoreA = getSearchScore(cleanGrocerySearch, a.name, a.code, null, a.barcode, a.category)
+        const scoreB = getSearchScore(cleanGrocerySearch, b.name, b.code, null, b.barcode, b.category)
+        if (scoreA !== scoreB) return scoreA - scoreB
+        return a.name.localeCompare(b.name)
+      })
+  }, [groceryItems, groceryCategory, cleanGrocerySearch])
+
+  const cleanChickenSearch = chickenSearch.trim().toLowerCase()
+  const chickenResults = useMemo(() => {
+    return chickenItems
+      .filter(item => {
+        if (!item.active) return false
+        if (!cleanChickenSearch) return true
+        return getSearchScore(cleanChickenSearch, item.name, item.code, item.cut) >= 0
+      })
+      .sort((a, b) => {
+        if (!cleanChickenSearch) return a.name.localeCompare(b.name)
+        const scoreA = getSearchScore(cleanChickenSearch, a.name, a.code, a.cut)
+        const scoreB = getSearchScore(cleanChickenSearch, b.name, b.code, b.cut)
+        if (scoreA !== scoreB) return scoreA - scoreB
+        return a.name.localeCompare(b.name)
+      })
+  }, [chickenItems, cleanChickenSearch])
 
   const selectedWeight = parseWeightInGrams(grams)
-  const selectedEffectiveRate = selected
-    ? (sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg !== undefined && selected.wholesalePricePerKg !== null && selected.wholesalePricePerKg > 0
-        ? selected.wholesalePricePerKg
-        : selected.pricePerKg)
-    : 0
   const customEstimated = selected && selectedWeight ? calculateChickenPrice(selectedWeight, selectedEffectiveRate) : 0
 
   const reset = () => {
@@ -2853,7 +3044,93 @@ export function PosPayment({
 
                     <div className="col-rate">
                       {item.kind === 'chicken' ? (
-                        `${formatMoney(item.pricePerKg)}/kg`
+                        editingCartChickenRateId === item.id ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={editingCartRateValue}
+                              onChange={e => setEditingCartRateValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  applyCartChickenRate(item.id)
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault()
+                                  setEditingCartChickenRateId(null)
+                                }
+                              }}
+                              autoFocus
+                              style={{
+                                width: '68px',
+                                padding: '2px 4px',
+                                fontSize: '11px',
+                                background: '#090e17',
+                                border: '1px solid #38bdf8',
+                                borderRadius: '3px',
+                                color: '#fff',
+                                fontWeight: 700,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => applyCartChickenRate(item.id)}
+                              style={{
+                                background: '#0284c7',
+                                border: 'none',
+                                color: '#fff',
+                                borderRadius: '3px',
+                                padding: '2px 5px',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                              }}
+                              title="Apply rate"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCartChickenRateId(null)}
+                              style={{
+                                background: '#334155',
+                                border: 'none',
+                                color: '#cbd5e1',
+                                borderRadius: '3px',
+                                padding: '2px 5px',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                              }}
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span>{formatMoney(item.pricePerKg)}/kg</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCartChickenRateId(item.id)
+                                setEditingCartRateValue(String(item.pricePerKg))
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#38bdf8',
+                                cursor: 'pointer',
+                                padding: '0 2px',
+                                fontSize: '11px',
+                                opacity: 0.8,
+                              }}
+                              title="Edit rate for this chicken item"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        )
                       ) : item.kind === 'grocery' && item.packPricingApplied ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
                           <span style={{ color: '#38bdf8', fontWeight: 700 }}>
@@ -3150,8 +3427,7 @@ export function PosPayment({
                         type="button"
                         className="chicken-card-btn"
                         onClick={() => {
-                          setSelected(item)
-                          setGrams('')
+                          openChickenModal(item)
                         }}
                         key={item.id}
                       >
@@ -3348,57 +3624,184 @@ export function PosPayment({
                 setNotice('Please enter a valid weight.')
                 return
               }
-              addChicken(parsed)
+              addChicken(parsed, undefined, selectedEffectiveRate)
             }}
           >
             <header>
               <div>
                 <small>SELECT WEIGHT · <strong style={{ color: '#f3b625' }}>{selected.code}</strong></small>
                 <h2>{selected.name}</h2>
-                <p>
-                  {sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg && selected.wholesalePricePerKg > 0 ? (
-                    <span>
-                      Wholesale Rate: <strong style={{ color: '#38bdf8' }}>{formatMoney(selected.wholesalePricePerKg)} / KG</strong>
-                      <del style={{ color: '#94a3b8', marginLeft: '8px', fontSize: '12px' }}>{formatMoney(selected.pricePerKg)}</del>
-                    </span>
-                  ) : (
-                    <span>Rate: <strong>{formatMoney(selected.pricePerKg)} / KG</strong></span>
-                  )}
-                </p>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSelected(null)
-                  setGrams('')
-                }}
+                onClick={closeChickenModal}
               >
                 ×
               </button>
             </header>
 
             <div className="editor-body">
+              {/* RATE / PRICE BAR (Direct input bar: automatically has price, or cashier can type custom price) */}
+              <div className="rate-bar-section" style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label style={{ margin: 0, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.4px', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>PRICE / RATE PER KG</span>
+                    <span
+                      style={{
+                        background: sellingMode === 'WHOLESALE' ? '#0284c7' : '#d97706',
+                        color: '#ffffff',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        letterSpacing: '0.5px',
+                      }}
+                    >
+                      {sellingMode === 'WHOLESALE' ? 'WHOLESALE' : 'RETAIL'}
+                    </span>
+                    {isCustomRateValid && (
+                      <span
+                        style={{
+                          background: '#10b981',
+                          color: '#ffffff',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.5px',
+                        }}
+                      >
+                        CUSTOM PRICE
+                      </span>
+                    )}
+                  </label>
+                  {isCustomRateValid && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRateInput(String(defaultRate))
+                        setIsCustomRateApplied(false)
+                        setSavePermanently(false)
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#38bdf8',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                      }}
+                      title={`Reset to default rate ${formatMoney(defaultRate)}`}
+                    >
+                      ↺ Reset ({formatMoney(defaultRate)})
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ position: 'relative' }}>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#94a3b8',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    Rs.
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={rateInput}
+                    onChange={e => {
+                      setRateInput(e.target.value)
+                      const val = parseFloat(e.target.value)
+                      setIsCustomRateApplied(Number.isFinite(val) && val > 0 && val !== defaultRate)
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        weightInputRef.current?.focus()
+                        weightInputRef.current?.select()
+                      }
+                    }}
+                    placeholder={String(defaultRate)}
+                    style={{
+                      width: '100%',
+                      paddingLeft: '38px',
+                      paddingRight: '64px',
+                      height: '40px',
+                      borderRadius: '6px',
+                      border: isCustomRateValid ? '2px solid #10b981' : '1px solid #334155',
+                      background: '#090e17',
+                      color: isCustomRateValid ? '#34d399' : '#f8fafc',
+                      fontSize: '15.5px',
+                      fontWeight: 800,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#64748b',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    / KG
+                  </span>
+                </div>
+
+                {isCustomRateValid && (
+                  <label
+                    style={{
+                      marginTop: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={savePermanently}
+                      onChange={e => setSavePermanently(e.target.checked)}
+                      style={{ width: '13px', height: '13px', cursor: 'pointer' }}
+                    />
+                    <span>Save {formatMoney(selectedEffectiveRate)} as permanent {sellingMode === 'WHOLESALE' ? 'wholesale' : 'retail'} price for {selected.name}</span>
+                  </label>
+                )}
+              </div>
               <div className="quick-weights-section">
                 <label style={{ marginBottom: '8px', display: 'block', fontWeight: 700 }}>
                   QUICK WEIGHT PRESETS (TAP TO ADD IMMEDIATELY)
                 </label>
                 <div className="quick-weight-chips" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                   {quickWeights.map(w => {
-                    const effRate = sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg && selected.wholesalePricePerKg > 0
-                      ? selected.wholesalePricePerKg
-                      : selected.pricePerKg
-                    const calcPrice = calculateChickenPrice(w, effRate)
+                    const calcPrice = calculateChickenPrice(w, selectedEffectiveRate)
                     return (
                       <button
                         type="button"
                         key={w}
                         className="quick-weight-btn"
                         style={{ minHeight: '56px', padding: '8px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-                        onClick={() => addChicken(w)}
+                        onClick={() => addChicken(w, undefined, selectedEffectiveRate)}
                         title={`Immediately add ${w >= 1000 ? `${w / 1000}kg` : `${w}g`} of ${selected.name}`}
                       >
                         <span style={{ fontSize: '16px', fontWeight: 800 }}>{w >= 1000 ? `${(w / 1000).toFixed(1).replace(/\.0$/, '')} KG` : `${w}g`}</span>
-                        <small style={{ color: sellingMode === 'WHOLESALE' && selected.wholesalePricePerKg ? '#38bdf8' : '#f3b625', fontWeight: 700, fontSize: '13px' }}>
+                        <small style={{ color: sellingMode === 'WHOLESALE' && (selected.wholesalePricePerKg || isCustomRateValid) ? '#38bdf8' : '#f3b625', fontWeight: 700, fontSize: '13px' }}>
                           {formatMoney(calcPrice)}
                         </small>
                       </button>
@@ -3410,6 +3813,7 @@ export function PosPayment({
               <label style={{ marginTop: '16px' }}>
                 ENTER CUSTOM WEIGHT (GRAMS OR KG)
                 <input
+                  ref={weightInputRef}
                   autoFocus
                   value={grams}
                   onChange={event => setGrams(event.target.value)}
@@ -3421,11 +3825,10 @@ export function PosPayment({
                         setNotice('Please enter a valid weight.')
                         return
                       }
-                      addChicken(parsed)
+                      addChicken(parsed, undefined, selectedEffectiveRate)
                     }
                     if (event.key === 'Escape') {
-                      setSelected(null)
-                      setGrams('')
+                      closeChickenModal()
                     }
                   }}
                   inputMode="decimal"
@@ -3447,7 +3850,23 @@ export function PosPayment({
                 </div>
                 <div className="preview-row">
                   <span>Rate:</span>
-                  <b>{formatMoney(selectedEffectiveRate)} / kg</b>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <b>{formatMoney(selectedEffectiveRate)} / kg</b>
+                    {isCustomRateValid && (
+                      <span
+                        style={{
+                          background: sellingMode === 'WHOLESALE' ? '#0284c7' : '#f59e0b',
+                          color: '#fff',
+                          fontSize: '9px',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                        }}
+                      >
+                        CUSTOM
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="preview-total-row">
                   <span>Total Price:</span>
@@ -3465,10 +3884,7 @@ export function PosPayment({
             <footer>
               <button
                 type="button"
-                onClick={() => {
-                  setSelected(null)
-                  setGrams('')
-                }}
+                onClick={closeChickenModal}
               >
                 Cancel
               </button>

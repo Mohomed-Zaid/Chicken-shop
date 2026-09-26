@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { formatMoney } from '../data/chicken'
 import { salesStore, toLocalDateString, type Sale, type PaymentMethod } from '../data/records'
-import { fetchSalesFromSupabase } from '../services/supabase/salesService'
+import { fetchSalesFromSupabase, deleteSaleFromSupabase } from '../services/supabase/salesService'
 import { storageAdapter } from '../services/storageAdapter'
+import { groceryStore } from '../data/grocery'
 import { ReceiptPreview } from './Receipt'
 
 export function Sales() {
@@ -16,6 +17,12 @@ export function Sales() {
   const [sellingModeFilter, setSellingModeFilter] = useState<'all' | 'RETAIL' | 'WHOLESALE'>('all')
   const [selectedReceipt, setSelectedReceipt] = useState<Sale | null>(null)
   const [inspectSale, setInspectSale] = useState<Sale | null>(null)
+
+  // Delete transaction states
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
+  const [restoreStockOption, setRestoreStockOption] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteNotice, setDeleteNotice] = useState('')
 
   // Load sales from local storage and Supabase cloud
   const refreshSales = async () => {
@@ -45,6 +52,58 @@ export function Sales() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Delete transaction handler
+  const handleDeleteSale = async () => {
+    if (!saleToDelete) return
+    setIsDeleting(true)
+    try {
+      const target = saleToDelete
+
+      // 1. Restore grocery product stock if option is checked
+      if (restoreStockOption && target.items && target.items.length > 0) {
+        try {
+          const products = groceryStore.load()
+          let stockChanged = false
+          target.items.forEach(it => {
+            if (it.productType === 'grocery' && it.productId) {
+              const p = products.find(x => x.id === it.productId || x.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
+              if (p) {
+                const qtyToRestore = it.totalQuantity ?? ((it.paidQuantity ?? it.quantity) + (it.freeQuantity || 0))
+                p.stockQuantity = (p.stockQuantity || 0) + qtyToRestore
+                stockChanged = true
+              }
+            }
+          })
+          if (stockChanged) {
+            groceryStore.save(products)
+          }
+        } catch (err) {
+          console.warn('Could not restore grocery stock upon sale deletion:', err)
+        }
+      }
+
+      // 2. Delete from Supabase cloud if connected
+      if (storageAdapter.isSupabase()) {
+        await deleteSaleFromSupabase(target.id).catch(() => {})
+      }
+
+      // 3. Delete from local salesStore
+      salesStore.removeSale(target.id)
+
+      // 4. Update component state and show feedback
+      setSales(prev => prev.filter(s => s.id !== target.id))
+      setDeleteNotice(`Invoice #${target.invoiceNumber} deleted successfully.`)
+      setTimeout(() => setDeleteNotice(''), 4500)
+
+      setSaleToDelete(null)
+    } catch (err) {
+      console.error('Failed to delete sale:', err)
+      alert('Failed to delete the sale transaction. Please try again.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -299,6 +358,32 @@ export function Sales() {
         </div>
       )}
 
+      {/* DELETE NOTICE ALERT */}
+      {deleteNotice && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid rgba(16, 185, 129, 0.4)',
+          color: '#6ee7b7',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '13px',
+          fontWeight: 600
+        }}>
+          <span>✓ {deleteNotice}</span>
+          <button
+            type="button"
+            onClick={() => setDeleteNotice('')}
+            style={{ background: 'transparent', border: 'none', color: '#6ee7b7', cursor: 'pointer', fontSize: '15px' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* SALES LIST TABLE */}
       <section className="price-table sales-table-container">
         <div className="price-row sales-row table-head">
@@ -307,8 +392,8 @@ export function Sales() {
           <span>Items Summary</span>
           <span>Cashier</span>
           <span>Payment &amp; Mode</span>
-          <span>Total Amount</span>
-          <span>Actions</span>
+          <span className="sales-head-total">Total Amount</span>
+          <span className="sales-head-actions">Actions</span>
         </div>
 
         {filteredSales.length === 0 ? (
@@ -416,6 +501,14 @@ export function Sales() {
                     title="View item breakdown"
                   >
                     👁️ Details
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-action-delete"
+                    onClick={() => setSaleToDelete(sale)}
+                    title="Delete transaction record"
+                  >
+                    🗑️ Delete
                   </button>
                 </div>
               </div>
@@ -588,6 +681,18 @@ export function Sales() {
             <footer className="inspect-dialog-footer">
               <button
                 type="button"
+                className="btn-action-delete"
+                onClick={() => {
+                  const s = inspectSale
+                  setInspectSale(null)
+                  setSaleToDelete(s)
+                }}
+                style={{ marginRight: 'auto', padding: '0 12px', height: '36px', fontSize: '12px' }}
+              >
+                🗑️ Delete Sale
+              </button>
+              <button
+                type="button"
                 className="btn-print-receipt"
                 onClick={() => {
                   const s = inspectSale
@@ -603,6 +708,138 @@ export function Sales() {
                 onClick={() => setInspectSale(null)}
               >
                 Close
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE TRANSACTION CONFIRMATION MODAL */}
+      {saleToDelete && (
+        <div className="shade" role="dialog" aria-modal="true">
+          <div className="dialog sales-delete-dialog">
+            <header className="dialog-header" style={{ borderBottomColor: '#7f1d1d' }}>
+              <div>
+                <small style={{ color: '#f87171', fontWeight: 800 }}>CONFIRM DELETION</small>
+                <h2 style={{ color: '#ffffff', margin: '2px 0 0' }}>Delete Invoice #{saleToDelete.invoiceNumber}?</h2>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setSaleToDelete(null)}
+                disabled={isDeleting}
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="editor-body" style={{ padding: '16px 20px' }}>
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                marginBottom: '14px',
+                color: '#fca5a5',
+                fontSize: '13px',
+                lineHeight: '1.45'
+              }}>
+                ⚠️ <strong>Warning:</strong> You are about to permanently delete this sale record. This transaction will be removed from sales reports and daily summaries.
+              </div>
+
+              <div style={{
+                background: '#0d151c',
+                border: '1px solid #283745',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                fontSize: '12px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Invoice Number:</span>
+                  <strong style={{ color: '#ffffff' }}>#{saleToDelete.invoiceNumber}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Date &amp; Time:</span>
+                  <span style={{ color: '#ffffff' }}>{formatDisplayDate(saleToDelete.date)} · {saleToDelete.time}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Customer:</span>
+                  <span style={{ color: '#ffffff' }}>{saleToDelete.customerName || 'Walk-in Customer'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Selling Mode:</span>
+                  <strong style={{ color: saleToDelete.sellingMode === 'WHOLESALE' ? '#38bdf8' : '#cbd5e1' }}>
+                    {saleToDelete.sellingMode === 'WHOLESALE' ? '📦 WHOLESALE' : '🛍️ RETAIL'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Payment Method:</span>
+                  <span style={{ color: '#ffffff' }}>{saleToDelete.paymentMethod}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #1e293b', paddingTop: '8px', marginTop: '2px' }}>
+                  <span style={{ color: '#94a3b8', fontWeight: 700 }}>Total Amount:</span>
+                  <strong style={{ color: '#10b981', fontSize: '15px' }}>{formatMoney(saleToDelete.total)}</strong>
+                </div>
+              </div>
+
+              {saleToDelete.items?.some(i => i.productType === 'grocery') && (
+                <label style={{
+                  marginTop: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: '#cbd5e1',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={restoreStockOption}
+                    onChange={e => setRestoreStockOption(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span>Restore grocery product quantities back to stock inventory</span>
+                </label>
+              )}
+            </div>
+
+            <footer style={{
+              background: '#111923',
+              borderTop: '1px solid #283745',
+              padding: '12px 18px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px'
+            }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setSaleToDelete(null)}
+                disabled={isDeleting}
+                style={{ height: '38px', padding: '0 16px', fontSize: '12px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSale}
+                disabled={isDeleting}
+                style={{
+                  height: '38px',
+                  padding: '0 16px',
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                {isDeleting ? 'Deleting...' : '🗑️ Yes, Delete Sale'}
               </button>
             </footer>
           </div>

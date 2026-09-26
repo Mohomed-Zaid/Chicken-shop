@@ -368,6 +368,101 @@ function Editor({
   const [newWsPrice, setNewWsPrice] = useState('')
   const [packRuleError, setPackRuleError] = useState('')
 
+  const currentRetailPrice = Number(
+    product.retailPrice !== undefined && product.retailPrice !== null
+      ? product.retailPrice
+      : product.sellingPrice || 0
+  )
+
+  const [discountPercent, setDiscountPercent] = useState<string>(() => {
+    const ret = Number(
+      item.retailPrice !== undefined && item.retailPrice !== null
+        ? item.retailPrice
+        : item.sellingPrice || 0
+    )
+    if (item.discountPrice && ret > 0 && item.discountPrice < ret) {
+      const pct = Math.round(((ret - item.discountPrice) / ret) * 100 * 10) / 10
+      return String(pct)
+    }
+    return ''
+  })
+
+  const handlePercentChange = (valStr: string) => {
+    setDiscountPercent(valStr)
+    const trimmed = valStr.trim()
+    if (!trimmed) {
+      setProduct(prev => ({
+        ...prev,
+        discountPrice: null,
+      }))
+      return
+    }
+
+    const pct = parseFloat(trimmed)
+    if (isNaN(pct) || pct < 0) {
+      return
+    }
+
+    if (currentRetailPrice > 0) {
+      if (pct >= 100) {
+        setError('Discount percentage must be less than 100%.')
+        return
+      }
+      setError('')
+      const calculatedPrice = Math.round((currentRetailPrice * (1 - pct / 100)) * 100) / 100
+      setProduct(prev => ({
+        ...prev,
+        discountPrice: calculatedPrice,
+      }))
+    }
+  }
+
+  const applyPercent = (pct: number) => {
+    setDiscountPercent(String(pct))
+    if (currentRetailPrice > 0) {
+      setError('')
+      const calculatedPrice = Math.round((currentRetailPrice * (1 - pct / 100)) * 100) / 100
+      setProduct(prev => ({
+        ...prev,
+        discountPrice: calculatedPrice,
+      }))
+    } else {
+      setError('Please enter a Retail Price first to calculate discount.')
+    }
+  }
+
+  const clearDiscount = () => {
+    setDiscountPercent('')
+    setProduct(prev => ({
+      ...prev,
+      discountPrice: null,
+    }))
+  }
+
+  const handleDiscountPriceChange = (priceStr: string) => {
+    if (priceStr.trim() === '') {
+      setProduct(prev => ({
+        ...prev,
+        discountPrice: null,
+      }))
+      setDiscountPercent('')
+      return
+    }
+
+    const priceNum = Number(priceStr)
+    setProduct(prev => ({
+      ...prev,
+      discountPrice: priceNum,
+    }))
+
+    if (currentRetailPrice > 0 && priceNum >= 0 && priceNum < currentRetailPrice) {
+      const pct = Math.round(((currentRetailPrice - priceNum) / currentRetailPrice) * 100 * 10) / 10
+      setDiscountPercent(String(pct))
+    } else {
+      setDiscountPercent('')
+    }
+  }
+
   const handleAddPackRule = (sellingMode: 'RETAIL' | 'WHOLESALE') => {
     setPackRuleError('')
     const qtyStr = sellingMode === 'RETAIL' ? newRetailQty : newWsQty
@@ -606,11 +701,18 @@ function Editor({
               value={product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : (product.sellingPrice || '')}
               onChange={e => {
                 const val = e.target.value === '' ? 0 : Number(e.target.value)
-                setProduct({
+                const nextProduct = {
                   ...product,
                   retailPrice: val,
                   sellingPrice: val,
-                })
+                }
+                if (discountPercent.trim() !== '') {
+                  const pct = parseFloat(discountPercent)
+                  if (!isNaN(pct) && pct > 0 && pct < 100 && val > 0) {
+                    nextProduct.discountPrice = Math.round((val * (1 - pct / 100)) * 100) / 100
+                  }
+                }
+                setProduct(nextProduct)
               }}
               placeholder="e.g. 100"
               required
@@ -936,25 +1038,92 @@ function Editor({
           </div>
 
           <label>
+            DISCOUNT PERCENTAGE (%)
+            <div style={{ position: 'relative' }}>
+              <input
+                type="number"
+                min="0"
+                max="99.9"
+                step="any"
+                value={discountPercent}
+                onChange={e => handlePercentChange(e.target.value)}
+                placeholder="e.g. 10 (for 10% off)"
+                style={{ paddingRight: '28px' }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontWeight: 800,
+                  color: '#64748b',
+                  fontSize: '13px',
+                  pointerEvents: 'none',
+                }}
+              >
+                %
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {[5, 10, 15, 20, 25, 50].map(pct => (
+                <button
+                  type="button"
+                  key={pct}
+                  onClick={() => applyPercent(pct)}
+                  style={{
+                    background: discountPercent === String(pct) ? '#10b981' : '#f1f5f9',
+                    color: discountPercent === String(pct) ? '#ffffff' : '#334155',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title={`Apply ${pct}% discount`}
+                >
+                  {pct}%
+                </button>
+              ))}
+              {discountPercent && (
+                <button
+                  type="button"
+                  onClick={clearDiscount}
+                  style={{
+                    background: '#fef2f2',
+                    color: '#ef4444',
+                    border: '1px solid #fecaca',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title="Clear discount"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+          </label>
+
+          <label>
             DISCOUNT PRICE (OPTIONAL RS.)
             <input
               type="number"
               min="0"
               step="0.01"
               value={product.discountPrice ?? ''}
-              onChange={e =>
-                setProduct({
-                  ...product,
-                  discountPrice: e.target.value === '' ? null : Number(e.target.value),
-                })
-              }
-              placeholder="e.g. 800 (leave blank if no discount)"
+              onChange={e => handleDiscountPriceChange(e.target.value)}
+              placeholder="e.g. 900 (or enter % on the left)"
             />
-            {product.discountPrice !== null && product.discountPrice !== undefined && product.discountPrice > 0 && Number(product.sellingPrice) > 0 && (
-              <small style={{ color: Number(product.discountPrice) < Number(product.sellingPrice) ? '#4ade80' : '#f87171', display: 'block', marginTop: '3px', fontWeight: 600 }}>
-                {Number(product.discountPrice) < Number(product.sellingPrice)
-                  ? `Savings: ${formatMoney(Number(product.sellingPrice) - Number(product.discountPrice))} (${Math.round(((Number(product.sellingPrice) - Number(product.discountPrice)) / Number(product.sellingPrice)) * 100)}% OFF)`
-                  : '⚠️ Discount price should be less than regular selling price.'}
+            {product.discountPrice !== null && product.discountPrice !== undefined && product.discountPrice > 0 && currentRetailPrice > 0 && (
+              <small style={{ color: Number(product.discountPrice) < currentRetailPrice ? '#16a34a' : '#ef4444', display: 'block', marginTop: '4px', fontWeight: 700, fontSize: '11px' }}>
+                {Number(product.discountPrice) < currentRetailPrice
+                  ? `✓ Final: ${formatMoney(Number(product.discountPrice))} (Save ${formatMoney(currentRetailPrice - Number(product.discountPrice))} · ${Math.round(((currentRetailPrice - Number(product.discountPrice)) / currentRetailPrice) * 100)}% OFF)`
+                  : '⚠️ Discount price should be less than regular retail price.'}
               </small>
             )}
           </label>

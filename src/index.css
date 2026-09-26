@@ -2590,7 +2590,8 @@ button {
   margin-top: 25px;
 }
 
-.receipt-preview {
+/* Legacy receipt container (kept for non-thermal fallback if any) */
+.legacy-receipt-box {
   background: white;
   color: #111;
   width: min(360px, 100%);
@@ -4864,16 +4865,19 @@ button {
 
 .sales-table-container {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sales-row {
   display: grid;
-  grid-template-columns: 160px 150px 1fr 110px 120px 130px 160px;
+  grid-template-columns: 165px 150px minmax(220px, 1fr) 100px 150px 140px 240px;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 11px 16px;
   border-bottom: 1px solid #223241;
   font-size: 12px;
+  min-width: 1060px;
+  box-sizing: border-box;
 }
 
 .sales-row.table-head {
@@ -4883,6 +4887,16 @@ button {
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.5px;
+}
+
+.sales-head-total {
+  text-align: right;
+  padding-right: 4px;
+}
+
+.sales-head-actions {
+  text-align: right;
+  padding-right: 6px;
 }
 
 .sales-col-invoice {
@@ -4981,34 +4995,54 @@ button {
 
 .sales-col-total {
   text-align: right;
+  padding-right: 4px;
+  white-space: nowrap;
 }
 
 .sale-total-amount {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
   color: #10b981;
   font-variant-numeric: tabular-nums;
+  display: inline-block;
 }
 
 .sales-col-actions {
   display: flex;
   gap: 6px;
+  align-items: center;
   justify-content: flex-end;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-action-receipt,
+.btn-action-inspect,
+.btn-action-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 6px 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+  flex-shrink: 0;
 }
 
 .btn-action-receipt {
   background: #243647;
   color: #e2e8f0;
   border: 1px solid #3b4e61;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .btn-action-receipt:hover {
-  background: #2f4559;
+  background: #0284c7;
+  border-color: #0284c7;
   color: #ffffff;
 }
 
@@ -5016,16 +5050,37 @@ button {
   background: transparent;
   color: #94a3b8;
   border: 1px solid #334155;
-  padding: 5px 9px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .btn-action-inspect:hover {
   background: #1e293b;
-  color: #e2e8f0;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+.btn-action-delete {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.btn-action-delete:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.sales-delete-dialog {
+  background: #17232d;
+  border: 1px solid #7f1d1d;
+  border-radius: 10px;
+  width: min(480px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
 .empty-sales-notice {
@@ -6792,26 +6847,91 @@ button {
   font-weight: 700;
 }
 
-/* Receipt Modal Card */
+/* Receipt Modal Overlay & Card */
+.shade.receipt-modal-shade {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(5, 10, 16, 0.88) !important;
+  backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 12px !important;
+  z-index: 1200 !important;
+}
+
 .receipt-modal-card {
   background: #17232d;
   border: 1px solid #364858;
   border-radius: 12px;
-  width: min(440px, 100%);
-  max-height: 92vh;
+  width: min(460px, 96vw);
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+  position: relative;
+  z-index: 1201;
 }
 
 .receipt-success-banner {
   background: #132b20;
   border-bottom: 1px solid #205c3d;
-  padding: 12px 16px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.receipt-lang-selector {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid #205c3d;
+}
+
+.receipt-lang-selector .lang-pill {
+  border: none;
+  background: transparent;
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.1;
+}
+
+.receipt-lang-selector .lang-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.receipt-lang-selector .lang-pill.active {
+  background: #10b981;
+  color: #0b1512;
+  font-weight: 900;
+}
+
+.receipt-modal-close-x {
+  border: none;
+  background: rgba(0, 0, 0, 0.25);
+  color: #a7f3d0;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.receipt-modal-close-x:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
 }
 
 .success-icon-badge {
@@ -7388,7 +7508,14 @@ button {
   .receipt-paper-roll,
   .receipt-success-banner,
   .receipt-modal-actions,
+  .receipt-lang-selector,
   .thermal-80mm-badge,
+  .mobile-top-header,
+  .mobile-bottom-nav,
+  .mobile-drawer-overlay,
+  .pos-mobile-nav-tabs,
+  .pos-mobile-catalog-toggle-row,
+  .pos-mobile-floating-cart,
   .report-filters,
   .report-tabs,
   .page-header,
@@ -8742,7 +8869,7 @@ button {
 }
 
 /* 2. Mobile Breakpoint: Screens <= 768px (Phones & Vertical Tablets) */
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
   /* Hide Desktop Sidebar */
   aside.sidebar {
     display: none !important;
@@ -9144,7 +9271,10 @@ button {
     border-radius: 8px !important;
   }
 
-  .sales-row,
+  .sales-row {
+    min-width: 1060px !important;
+  }
+
   .customer-table-head,
   .customer-table-row {
     min-width: 780px !important;
@@ -9334,6 +9464,55 @@ button {
 
   .pos-workspace {
     padding: 4px 6px 12px !important;
+  }
+
+  /* Receipt Modal on Mobile */
+  .shade.receipt-modal-shade {
+    padding: 6px !important;
+  }
+
+  .receipt-modal-card {
+    width: 98vw !important;
+    max-height: 94vh !important;
+    border-radius: 10px;
+  }
+
+  .receipt-success-banner {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .receipt-success-banner .success-text h2 {
+    font-size: 13px;
+  }
+
+  .receipt-preview-scroll {
+    padding: 10px 6px;
+  }
+
+  .receipt-paper-roll {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .receipt-modal-actions {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .receipt-modal-actions button {
+    flex: 1 1 calc(50% - 6px);
+    height: 42px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+
+  .receipt-modal-actions .btn-print-receipt {
+    flex: 1 1 100%;
+    height: 44px;
+    font-size: 14px;
   }
 }
 
