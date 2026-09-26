@@ -882,6 +882,165 @@ function PurchaseEditor({
   )
 }
 
+export function PurchaseReceiptContent({
+  purchase,
+  settings,
+  chickenTotalKg,
+}: {
+  purchase: Purchase
+  settings: ReturnType<typeof loadReceiptSettings>
+  chickenTotalKg: number
+}) {
+  return (
+    <section className="receipt thermal-80mm">
+      {/* HEADER */}
+      <header className="thermal-header">
+        <img
+          src="/logo2.jpeg"
+          alt="Shop Logo"
+          className="thermal-logo"
+          style={{ maxHeight: '44px', margin: '0 auto 4px', display: 'block' }}
+        />
+        <h1 className="thermal-business-name">{settings.businessName}</h1>
+        <p className="thermal-address">{settings.address}</p>
+        <p className="thermal-contact">දු.අ. / Tel: {settings.phone}</p>
+        <p className="thermal-receipt-title" style={{ marginTop: '4px', fontWeight: 800 }}>
+          PURCHASE INVOICE / තොග මිලදී ගැනීම් පත්‍රිකාව
+        </p>
+      </header>
+
+      <div className="thermal-divider-dashed" />
+
+      {/* METADATA */}
+      <div className="thermal-meta-block">
+        <div className="thermal-meta-row">
+          <span className="meta-label">මිලදී ගැනුම් අංකය / Purchase #:</span>
+          <strong className="meta-value bold-invoice">#{purchase.purchaseNumber}</strong>
+        </div>
+        <div className="thermal-meta-row">
+          <span className="meta-label">දිනය / Date:</span>
+          <span className="meta-value">{purchase.date}</span>
+        </div>
+        <div className="thermal-meta-row">
+          <span className="meta-label">වේලාව / Time:</span>
+          <span className="meta-value">{purchase.time}</span>
+        </div>
+        <div className="thermal-meta-row">
+          <span className="meta-label">සැපයුම්කරු / Supplier:</span>
+          <span className="meta-value">{purchase.supplierName || 'Direct purchase'}</span>
+        </div>
+        <div className="thermal-meta-row">
+          <span className="meta-label">තත්ත්වය / Status:</span>
+          <span className="meta-value" style={{ textTransform: 'uppercase', fontWeight: 700 }}>
+            {purchase.status}
+          </span>
+        </div>
+      </div>
+
+      <div className="thermal-divider-dashed" />
+
+      {/* ITEMS TABLE */}
+      <div className="thermal-items-container">
+        <div className="thermal-items-header">
+          <span className="col-desc">විස්තරය (ITEM)</span>
+          <span className="col-calc">ප්‍රමාණය / මිල (QTY×COST)</span>
+          <span className="col-total">එකතුව (TOTAL)</span>
+        </div>
+
+        <div className="thermal-items-list">
+          {purchase.items.map((item, index) => {
+            const isChicken = item.productType === 'chicken'
+            const qtyDisplay = isChicken
+              ? `${item.quantity} kg × ${formatMoney(item.costPrice)}/kg`
+              : `${item.quantity} ${item.unit || 'pc'} × ${formatMoney(item.costPrice)}`
+
+            return (
+              <div className="thermal-item-row" key={`${item.productId}-${index}`}>
+                <div className="item-name-line">
+                  {isChicken ? '🐔 ' : '🛒 '}
+                  {item.productName}
+                </div>
+                <div className="item-sub-line">
+                  <span className="item-rate">{qtyDisplay}</span>
+                  <span className="item-total">{formatMoney(item.total)}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="thermal-divider-dashed" />
+
+      {/* FINANCIAL SUMMARY */}
+      <div className="thermal-summary-block">
+        <div className="thermal-summary-row counts-row">
+          <span>මුළු අයිතම / Total Items:</span>
+          <strong>{purchase.items.length} lines</strong>
+        </div>
+
+        {chickenTotalKg > 0 && (
+          <div className="thermal-summary-row" style={{ color: '#0369a1' }}>
+            <span>මුළු කුකුළු මස් / Total Chicken:</span>
+            <strong>{chickenTotalKg.toFixed(2)} kg</strong>
+          </div>
+        )}
+
+        <div className="thermal-summary-row">
+          <span>උප එකතුව / Subtotal:</span>
+          <span>{formatMoney(purchase.subtotal)}</span>
+        </div>
+
+        {purchase.discount > 0 && (
+          <div className="thermal-summary-row discount-row">
+            <span>වට්ටම / Discount:</span>
+            <span>-{formatMoney(purchase.discount)}</span>
+          </div>
+        )}
+
+        <div className="thermal-summary-row thermal-grand-total">
+          <span>මුළු එකතුව / GRAND TOTAL:</span>
+          <span>{formatMoney(purchase.total)}</span>
+        </div>
+
+        <div className="thermal-summary-row">
+          <span>ගෙවීම් ක්‍රමය / Payment:</span>
+          <span>{purchase.paymentMethod}</span>
+        </div>
+
+        <div className="thermal-summary-row">
+          <span>ගෙවූ මුදල / Amount Paid:</span>
+          <span>{formatMoney(purchase.amountPaid)}</span>
+        </div>
+
+        <div className="thermal-summary-row">
+          <span>හිඟ මුදල / Balance Due:</span>
+          <strong>{formatMoney(purchase.balanceDue)}</strong>
+        </div>
+      </div>
+
+      <div className="thermal-divider-dashed" />
+
+      {/* BARCODE */}
+      <div className="thermal-barcode-section">
+        <BarcodeSvg text={purchase.purchaseNumber} />
+      </div>
+
+      {/* FOOTER */}
+      <footer className="thermal-footer">
+        <p className="footer-system-note">
+          *** තොග භාරගැනීමේ සනාථනය ***<br />
+          Inventory Stock-in &amp; Goods Received Note<br />
+          Chicken Kade Inventory Management
+        </p>
+      </footer>
+
+      {/* THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
+      <div className="receipt-cut-space" />
+    </section>
+  )
+}
+
 function PurchaseDocument({
   purchase,
   autoPrint,
@@ -927,207 +1086,70 @@ function PurchaseDocument({
     .reduce((sum, i) => sum + (i.quantity || 0), 0)
 
   return (
-    <div className="shade receipt-modal-shade" role="dialog" aria-modal="true">
-      <div className="receipt-modal-card receipt-preview">
-        {/* MODAL SUCCESS BANNER (SCREEN ONLY) */}
-        {isNew && (
-          <div className="no-print receipt-success-banner">
-            <div className="success-icon-badge">✓</div>
-            <div className="success-text">
-              <h2>Purchase Completed Successfully!</h2>
-              <span>
-                Order: <strong>#{purchase.purchaseNumber}</strong> · Total: <strong>{formatMoney(purchase.total)}</strong>
-                {chickenTotalKg > 0 && ` · Chicken: ${chickenTotalKg.toFixed(2)} kg`}
-              </span>
+    <>
+      {/* SCREEN-ONLY MODAL (COMPLETELY OMITTED FROM PRINT) */}
+      <div className="shade receipt-modal-shade no-print" role="dialog" aria-modal="true">
+        <div className="receipt-modal-card receipt-preview">
+          {/* MODAL SUCCESS BANNER (SCREEN ONLY) */}
+          {isNew && (
+            <div className="no-print receipt-success-banner">
+              <div className="success-icon-badge">✓</div>
+              <div className="success-text">
+                <h2>Purchase Completed Successfully!</h2>
+                <span>
+                  Order: <strong>#{purchase.purchaseNumber}</strong> · Total: <strong>{formatMoney(purchase.total)}</strong>
+                  {chickenTotalKg > 0 && ` · Chicken: ${chickenTotalKg.toFixed(2)} kg`}
+                </span>
+              </div>
+              <div className="thermal-80mm-badge">🖨️ 80mm Thermal Ready</div>
             </div>
-            <div className="thermal-80mm-badge">🖨️ 80mm Thermal Ready</div>
-          </div>
-        )}
-
-        {/* RECEIPT PAPER ROLL */}
-        <div className="receipt-preview-scroll">
-          <div className="receipt-paper-roll">
-            <section className="receipt thermal-80mm">
-              {/* HEADER */}
-              <header className="thermal-header">
-                <img
-                  src="/logo2.jpeg"
-                  alt="Shop Logo"
-                  className="thermal-logo"
-                  style={{ maxHeight: '44px', margin: '0 auto 4px', display: 'block' }}
-                />
-                <h1 className="thermal-business-name">{settings.businessName}</h1>
-                <p className="thermal-address">{settings.address}</p>
-                <p className="thermal-contact">දු.අ. / Tel: {settings.phone}</p>
-                <p className="thermal-receipt-title" style={{ marginTop: '4px', fontWeight: 800 }}>
-                  PURCHASE INVOICE / තොග මිලදී ගැනීම් පත්‍රිකාව
-                </p>
-              </header>
-
-              <div className="thermal-divider-dashed" />
-
-              {/* METADATA */}
-              <div className="thermal-meta-block">
-                <div className="thermal-meta-row">
-                  <span className="meta-label">මිලදී ගැනුම් අංකය / Purchase #:</span>
-                  <strong className="meta-value bold-invoice">{purchase.purchaseNumber}</strong>
-                </div>
-                <div className="thermal-meta-row">
-                  <span className="meta-label">දිනය / Date:</span>
-                  <span className="meta-value">{purchase.date}</span>
-                </div>
-                <div className="thermal-meta-row">
-                  <span className="meta-label">වේලාව / Time:</span>
-                  <span className="meta-value">{purchase.time}</span>
-                </div>
-                <div className="thermal-meta-row">
-                  <span className="meta-label">සැපයුම්කරු / Supplier:</span>
-                  <span className="meta-value">{purchase.supplierName || 'Direct purchase'}</span>
-                </div>
-                <div className="thermal-meta-row">
-                  <span className="meta-label">තත්ත්වය / Status:</span>
-                  <span className="meta-value" style={{ textTransform: 'uppercase', fontWeight: 700 }}>
-                    {purchase.status}
-                  </span>
-                </div>
-              </div>
-
-              <div className="thermal-divider-dashed" />
-
-              {/* ITEMS TABLE */}
-              <div className="thermal-items-container">
-                <div className="thermal-items-header">
-                  <span className="col-desc">විස්තරය (ITEM)</span>
-                  <span className="col-calc">ප්‍රමාණය / මිල (QTY×COST)</span>
-                  <span className="col-total">එකතුව (TOTAL)</span>
-                </div>
-
-                <div className="thermal-items-list">
-                  {purchase.items.map((item, index) => {
-                    const isChicken = item.productType === 'chicken'
-                    const qtyDisplay = isChicken
-                      ? `${item.quantity} kg × ${formatMoney(item.costPrice)}/kg`
-                      : `${item.quantity} ${item.unit || 'pc'} × ${formatMoney(item.costPrice)}`
-
-                    return (
-                      <div className="thermal-item-row" key={`${item.productId}-${index}`}>
-                        <div className="item-name-line">
-                          {isChicken ? '🐔 ' : '🛒 '}
-                          {item.productName}
-                        </div>
-                        <div className="item-sub-line">
-                          <span className="item-rate">{qtyDisplay}</span>
-                          <span className="item-total">{formatMoney(item.total)}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="thermal-divider-dashed" />
-
-              {/* FINANCIAL SUMMARY */}
-              <div className="thermal-summary-block">
-                <div className="thermal-summary-row counts-row">
-                  <span>මුළු අයිතම / Total Items:</span>
-                  <strong>{purchase.items.length} lines</strong>
-                </div>
-
-                {chickenTotalKg > 0 && (
-                  <div className="thermal-summary-row" style={{ color: '#0369a1' }}>
-                    <span>මුළු කුකුළු මස් / Total Chicken:</span>
-                    <strong>{chickenTotalKg.toFixed(2)} kg</strong>
-                  </div>
-                )}
-
-                <div className="thermal-summary-row">
-                  <span>උප එකතුව / Subtotal:</span>
-                  <span>{formatMoney(purchase.subtotal)}</span>
-                </div>
-
-                {purchase.discount > 0 && (
-                  <div className="thermal-summary-row discount-row">
-                    <span>වට්ටම / Discount:</span>
-                    <span>-{formatMoney(purchase.discount)}</span>
-                  </div>
-                )}
-
-                <div className="thermal-summary-row thermal-grand-total">
-                  <span>මුළු එකතුව / GRAND TOTAL:</span>
-                  <span>{formatMoney(purchase.total)}</span>
-                </div>
-
-                <div className="thermal-summary-row">
-                  <span>ගෙවීම් ක්‍රමය / Payment:</span>
-                  <span>{purchase.paymentMethod}</span>
-                </div>
-
-                <div className="thermal-summary-row">
-                  <span>ගෙවූ මුදල / Amount Paid:</span>
-                  <span>{formatMoney(purchase.amountPaid)}</span>
-                </div>
-
-                <div className="thermal-summary-row">
-                  <span>හිඟ මුදල / Balance Due:</span>
-                  <strong>{formatMoney(purchase.balanceDue)}</strong>
-                </div>
-              </div>
-
-              <div className="thermal-divider-dashed" />
-
-              {/* BARCODE */}
-              <div className="thermal-barcode-section">
-                <BarcodeSvg text={purchase.purchaseNumber} />
-              </div>
-
-              {/* FOOTER */}
-              <footer className="thermal-footer">
-                <p className="footer-system-note">
-                  *** තොග භාරගැනීමේ සනාථනය ***<br />
-                  Inventory Stock-in &amp; Goods Received Note<br />
-                  Chicken Kade Inventory Management
-                </p>
-              </footer>
-
-              {/* THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
-              <div className="receipt-cut-space" />
-            </section>
-          </div>
-        </div>
-
-        {/* ACTION BUTTONS (SCREEN ONLY) */}
-        <div className="no-print receipt-modal-actions">
-          <button
-            type="button"
-            className="btn-print-receipt"
-            onClick={() => window.print()}
-            title="Print thermal purchase receipt (Shortcut: P)"
-          >
-            🖨️ Print Purchase Receipt (80mm)
-          </button>
-
-          {onNewPurchase && (
-            <button
-              type="button"
-              className="confirm btn-new-sale"
-              onClick={onNewPurchase}
-              title="Create another purchase"
-            >
-              ➕ New Purchase
-            </button>
           )}
 
-          <button
-            type="button"
-            className="btn-close-receipt"
-            onClick={close}
-            title="Close preview (Shortcut: Esc)"
-          >
-            Close
-          </button>
+          {/* RECEIPT PAPER ROLL PREVIEW */}
+          <div className="receipt-preview-scroll">
+            <div className="receipt-paper-roll">
+              <PurchaseReceiptContent purchase={purchase} settings={settings} chickenTotalKg={chickenTotalKg} />
+            </div>
+          </div>
+
+          {/* ACTION BUTTONS (SCREEN ONLY) */}
+          <div className="no-print receipt-modal-actions">
+            <button
+              type="button"
+              className="btn-print-receipt"
+              onClick={() => window.print()}
+              title="Print thermal purchase receipt (Shortcut: P)"
+            >
+              🖨️ Print Purchase Receipt (80mm)
+            </button>
+
+            {onNewPurchase && (
+              <button
+                type="button"
+                className="confirm btn-new-sale"
+                onClick={onNewPurchase}
+                title="Create another purchase"
+              >
+                ➕ New Purchase
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn-close-receipt"
+              onClick={close}
+              title="Close preview (Shortcut: Esc)"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* DEDICATED CLEAN PRINT CONTAINER (PRINTS ONLY ON WHITE THERMAL PAPER WITH ZERO BORDERS) */}
+      <div className="thermal-print-only">
+        <PurchaseReceiptContent purchase={purchase} settings={settings} chickenTotalKg={chickenTotalKg} />
+      </div>
+    </>
   )
 }

@@ -7485,9 +7485,9 @@ button {
   .catalog,
   .dashboard-page,
   .settings-page,
-  .prices-page:not(.reports-page):not(:has(.thermal-print-only)):not(:has(.receipt)),
-  .prices-page:not(.reports-page)> :not(.thermal-print-only):not(.report-print-area),
-  .purchases-page> :not(.shade):not(.receipt-modal-shade),
+  .prices-page:not(.purchases-page):not(.reports-page):not(:has(.thermal-print-only)):not(:has(.receipt)),
+  .prices-page:not(.purchases-page):not(.reports-page)> :not(.thermal-print-only):not(.report-print-area),
+  .purchases-page> :not(.thermal-print-only),
   .sales-page> :not(.thermal-print-only),
   .subscription-warning-banner,
   .subscription-banner,
@@ -7555,7 +7555,8 @@ button {
   .pos-workspace,
   .pos,
   .sales-page,
-  .prices-page {
+  .prices-page,
+  .purchases-page {
     display: block !important;
     background: transparent !important;
     border: none !important;
