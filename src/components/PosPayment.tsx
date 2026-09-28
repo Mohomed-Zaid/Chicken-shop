@@ -7,6 +7,9 @@ import {
   formatWeightDisplay,
   chickenStore,
   compareChickenCuts,
+  loadQuickWeights,
+  saveQuickWeights,
+  DEFAULT_QUICK_WEIGHTS,
   type ChickenCartItem,
   type ChickenItem,
 } from '../data/chicken'
@@ -50,7 +53,6 @@ type GroceryCartItem = {
 }
 type Cart = ChickenCartItem | GroceryCartItem
 
-const quickWeights = [250, 500, 750, 1000, 1500, 2000]
 
 function CartItemQtyInput({
   quantity,
@@ -1158,6 +1160,57 @@ export function PosPayment({
   const [search, setSearch] = useState('')
   const [chickenSearch, setChickenSearch] = useState('')
   const [notice, setNotice] = useState('')
+  const [quickWeights, setQuickWeights] = useState<number[]>(() => loadQuickWeights())
+  const [isEditingQuickWeights, setIsEditingQuickWeights] = useState(false)
+  const [newQuickWeightInput, setNewQuickWeightInput] = useState('')
+
+  const handleUpdateQuickWeight = (index: number, valStr: string) => {
+    const trimmed = valStr.trim()
+    if (!trimmed) return
+    const parsed = parseWeightInGrams(trimmed)
+    if (!parsed || parsed <= 0) {
+      setNotice('Please enter a valid weight (e.g. 200g, 500g, 1.5kg).')
+      return
+    }
+    const updated = [...quickWeights]
+    updated[index] = parsed
+    setQuickWeights(updated)
+    saveQuickWeights(updated)
+  }
+
+  const handleAddQuickWeight = () => {
+    const trimmed = newQuickWeightInput.trim()
+    if (!trimmed) return
+    const parsed = parseWeightInGrams(trimmed)
+    if (!parsed || parsed <= 0) {
+      setNotice('Please enter a valid weight (e.g. 200g, 350g, 3kg).')
+      return
+    }
+    if (quickWeights.includes(parsed)) {
+      setNotice(`${parsed >= 1000 ? `${parseFloat((parsed / 1000).toFixed(2))}kg` : `${parsed}g`} preset already exists.`)
+      return
+    }
+    const updated = [...quickWeights, parsed].sort((a, b) => a - b)
+    setQuickWeights(updated)
+    saveQuickWeights(updated)
+    setNewQuickWeightInput('')
+  }
+
+  const handleRemoveQuickWeight = (index: number) => {
+    if (quickWeights.length <= 1) {
+      setNotice('At least one weight preset is required.')
+      return
+    }
+    const updated = quickWeights.filter((_, i) => i !== index)
+    setQuickWeights(updated)
+    saveQuickWeights(updated)
+  }
+
+  const handleResetQuickWeights = () => {
+    const def = [...DEFAULT_QUICK_WEIGHTS]
+    setQuickWeights(def)
+    saveQuickWeights(def)
+  }
   const [payment, setPayment] = useState(false)
   const [completed, setCompleted] = useState<Sale | null>(null)
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => heldOrdersStore.get())
@@ -1376,6 +1429,7 @@ export function PosPayment({
     setRateInput('')
     setIsCustomRateApplied(false)
     setSavePermanently(false)
+    setIsEditingQuickWeights(false)
   }
 
   useEffect(() => {
@@ -3786,23 +3840,224 @@ export function PosPayment({
                 )}
               </div>
               <div className="quick-weights-section">
-                <label style={{ marginBottom: '8px', display: 'block', fontWeight: 700 }}>
-                  QUICK WEIGHT PRESETS (TAP TO ADD IMMEDIATELY)
-                </label>
-                <div className="quick-weight-chips" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  {quickWeights.map(w => {
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ margin: 0, fontWeight: 700, fontSize: '11px', letterSpacing: '0.5px' }}>
+                    QUICK WEIGHT PRESETS (TAP TO ADD IMMEDIATELY)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingQuickWeights(prev => !prev)}
+                    style={{
+                      background: isEditingQuickWeights ? '#0284c7' : 'rgba(56, 189, 248, 0.12)',
+                      color: isEditingQuickWeights ? '#ffffff' : '#38bdf8',
+                      border: '1px solid ' + (isEditingQuickWeights ? '#38bdf8' : 'rgba(56, 189, 248, 0.3)'),
+                      borderRadius: '5px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="Customize quick weight preset buttons (e.g. change 250g to 200g)"
+                  >
+                    <span>{isEditingQuickWeights ? '✓ Done Editing' : '✏️ Edit Presets'}</span>
+                  </button>
+                </div>
+
+                {isEditingQuickWeights && (
+                  <div
+                    style={{
+                      background: '#090e17',
+                      border: '1px solid #1e293b',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>
+                        ✏️ Edit Weight Presets
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetQuickWeights}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#94a3b8',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0,
+                        }}
+                        title="Reset back to default [250g, 500g, 750g, 1 KG, 1.5 KG, 2 KG]"
+                      >
+                        ↺ Reset to Defaults
+                      </button>
+                    </div>
+
+                    <p style={{ margin: '0 0 10px', fontSize: '11px', color: '#94a3b8' }}>
+                      Click on any preset below to edit its weight (e.g. <code>200g</code>, <code>250g</code>, <code>1.5kg</code>) or delete it:
+                    </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+                        gap: '8px',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      {quickWeights.map((w, idx) => (
+                        <div
+                          key={`${idx}-${w}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: '#1e293b',
+                            border: '1px solid #38bdf8',
+                            borderRadius: '6px',
+                            padding: '3px 6px',
+                            gap: '4px',
+                          }}
+                        >
+                          <input
+                            type="text"
+                            defaultValue={w >= 1000 ? `${parseFloat((w / 1000).toFixed(2))}kg` : `${w}g`}
+                            onBlur={e => handleUpdateQuickWeight(idx, e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                handleUpdateQuickWeight(idx, (e.target as HTMLInputElement).value)
+                                ;(e.target as HTMLInputElement).blur()
+                              }
+                            }}
+                            placeholder="e.g. 200g"
+                            style={{
+                              width: '100%',
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#ffffff',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              textAlign: 'center',
+                              outline: 'none',
+                              padding: '2px',
+                            }}
+                            title="Edit preset weight (e.g. 200g, 250g, 1.5kg)"
+                          />
+                          {quickWeights.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveQuickWeight(idx)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 800,
+                                padding: '0 2px',
+                                lineHeight: 1,
+                              }}
+                              title="Delete this preset"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="Add new preset (e.g. 200g, 350g, 3kg)"
+                        value={newQuickWeightInput}
+                        onChange={e => setNewQuickWeightInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddQuickWeight()
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          height: '32px',
+                          background: '#111827',
+                          border: '1px solid #334155',
+                          borderRadius: '5px',
+                          color: '#ffffff',
+                          padding: '0 10px',
+                          fontSize: '12px',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddQuickWeight}
+                        style={{
+                          height: '32px',
+                          padding: '0 12px',
+                          background: '#0284c7',
+                          border: 'none',
+                          borderRadius: '5px',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  className="quick-weight-chips"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(95px, 1fr))',
+                    gap: '8px',
+                  }}
+                >
+                  {quickWeights.map((w, idx) => {
                     const calcPrice = calculateChickenPrice(w, selectedEffectiveRate)
+                    const label = w >= 1000 ? `${parseFloat((w / 1000).toFixed(2))} KG` : `${w}g`
                     return (
                       <button
                         type="button"
-                        key={w}
+                        key={`${w}-${idx}`}
                         className="quick-weight-btn"
-                        style={{ minHeight: '56px', padding: '8px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-                        onClick={() => addChicken(w, undefined, selectedEffectiveRate)}
-                        title={`Immediately add ${w >= 1000 ? `${w / 1000}kg` : `${w}g`} of ${selected.name}`}
+                        style={{
+                          minHeight: '56px',
+                          padding: '8px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        onClick={() => {
+                          if (isEditingQuickWeights) return
+                          addChicken(w, undefined, selectedEffectiveRate)
+                        }}
+                        title={isEditingQuickWeights ? 'Editing preset' : `Immediately add ${w >= 1000 ? `${w / 1000}kg` : `${w}g`} of ${selected.name}`}
                       >
-                        <span style={{ fontSize: '16px', fontWeight: 800 }}>{w >= 1000 ? `${(w / 1000).toFixed(1).replace(/\.0$/, '')} KG` : `${w}g`}</span>
-                        <small style={{ color: sellingMode === 'WHOLESALE' && (selected.wholesalePricePerKg || isCustomRateValid) ? '#38bdf8' : '#f3b625', fontWeight: 700, fontSize: '13px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 800 }}>{label}</span>
+                        <small
+                          style={{
+                            color:
+                              sellingMode === 'WHOLESALE' && (selected.wholesalePricePerKg || isCustomRateValid)
+                                ? '#38bdf8'
+                                : '#f3b625',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                          }}
+                        >
                           {formatMoney(calcPrice)}
                         </small>
                       </button>

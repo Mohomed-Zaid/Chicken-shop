@@ -153,6 +153,25 @@ const fromStorage = <T,>(key: string, fallback: T): T => {
   }
 }
 
+export const DEFAULT_QUICK_WEIGHTS: number[] = [250, 500, 750, 1000, 1500, 2000]
+const quickWeightsKey = 'pos-quick-weights'
+
+export const loadQuickWeights = (): number[] => {
+  const raw = fromStorage<number[]>(quickWeightsKey, DEFAULT_QUICK_WEIGHTS)
+  if (Array.isArray(raw) && raw.length > 0 && raw.every(w => typeof w === 'number' && Number.isFinite(w) && w > 0)) {
+    return raw
+  }
+  return [...DEFAULT_QUICK_WEIGHTS]
+}
+
+export const saveQuickWeights = (weights: number[]): void => {
+  try {
+    localStorage.setItem(quickWeightsKey, JSON.stringify(weights))
+  } catch {
+    // ignore
+  }
+}
+
 export const chickenStore = {
   loadItems: (): ChickenItem[] => {
     const raw = fromStorage<ChickenItem[]>(priceKey, defaultChickenItems)
