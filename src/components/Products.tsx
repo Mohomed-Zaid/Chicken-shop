@@ -18,6 +18,7 @@ export function Products({
 }) {
   const [edit, setEdit] = useState<GroceryProduct | undefined>()
   const [deletingProduct, setDeletingProduct] = useState<GroceryProduct | null>(null)
+  const [restockProduct, setRestockProduct] = useState<GroceryProduct | null>(null)
   const [query, setQuery] = useState('')
   const [pricingFilter, setPricingFilter] = useState<'ALL' | 'WHOLESALE' | 'RETAIL_ONLY'>('ALL')
   const [syncing, setSyncing] = useState(false)
@@ -252,6 +253,27 @@ export function Products({
                 {item.stockQuantity} {item.stockQuantity <= item.lowStockLevel && 'LOW STOCK'}
               </span>
               <span style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  style={{
+                    background: item.stockQuantity <= 0 ? '#10b981' : '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onClick={() => setRestockProduct(item)}
+                  title={`Add stock to ${item.name}`}
+                >
+                  + Add Stock
+                </button>
                 <button className="edit" onClick={() => setEdit(item)} title="Edit product details">
                   Edit
                 </button>
@@ -283,6 +305,10 @@ export function Products({
           close={() => setEdit(undefined)}
           save={onSave}
           onDeleteRequest={productToDelete => setDeletingProduct(productToDelete)}
+          onRestockRequest={productToRestock => {
+            setEdit(undefined)
+            setRestockProduct(productToRestock)
+          }}
         />
       )}
 
@@ -345,6 +371,14 @@ export function Products({
           </div>
         </div>
       )}
+
+      {restockProduct && (
+        <RestockModal
+          product={restockProduct}
+          close={() => setRestockProduct(null)}
+          onSave={onSave}
+        />
+      )}
     </section>
   )
 }
@@ -355,15 +389,18 @@ function Editor({
   close,
   save,
   onDeleteRequest,
+  onRestockRequest,
 }: {
   item: GroceryProduct
   existing: GroceryProduct[]
   close: () => void
   save: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void
   onDeleteRequest?: (item: GroceryProduct) => void
+  onRestockRequest?: (item: GroceryProduct) => void
 }) {
   const [product, setProduct] = useState(item)
   const [error, setError] = useState('')
+  const [duplicateFound, setDuplicateFound] = useState<GroceryProduct | null>(null)
   const [newRetailQty, setNewRetailQty] = useState('')
   const [newRetailPrice, setNewRetailPrice] = useState('')
   const [newWsQty, setNewWsQty] = useState('')
@@ -546,15 +583,18 @@ function Editor({
     if (isNaN(codeNum) || codeNum < 100) {
       return setError('Grocery product code must be a number 100 or higher (1-99 is reserved for Chicken).')
     }
-    if (existing.some(other => other.code === codeVal && other.id !== product.id)) {
-      return setError(`Product code #${codeVal} is already assigned to another product.`)
+    const dupCode = existing.find(other => other.code === codeVal && other.id !== product.id)
+    if (dupCode) {
+      setDuplicateFound(dupCode)
+      return setError(`Product code #${codeVal} is already assigned to "${dupCode.name}".`)
     }
 
-    if (
-      product.barcode &&
-      existing.some(other => other.barcode === product.barcode && other.id !== product.id)
-    ) {
-      return setError('Barcode already belongs to another product.')
+    const dupBarcode = product.barcode
+      ? existing.find(other => other.barcode === product.barcode && other.id !== product.id)
+      : null
+    if (dupBarcode) {
+      setDuplicateFound(dupBarcode)
+      return setError(`Barcode "${product.barcode}" already belongs to "${dupBarcode.name}".`)
     }
 
     const discNum =
@@ -1129,7 +1169,27 @@ function Editor({
               </small>
             )}
           </label>
-          {field('stockQuantity', 'STOCK QUANTITY', 'number')}
+          <label>
+            STOCK QUANTITY (TOTAL AVAILABLE)
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={String(product.stockQuantity ?? '')}
+              onChange={e =>
+                setProduct({
+                  ...product,
+                  stockQuantity: e.target.value === '' ? 0 : Number(e.target.value),
+                })
+              }
+              placeholder="0"
+            />
+            <small style={{ color: product.stockQuantity <= 0 ? '#ef4444' : '#10b981', display: 'block', marginTop: '4px', fontWeight: 600, fontSize: '11px' }}>
+              {product.stockQuantity <= 0
+                ? '⚠️ Currently Out of Stock (0). Enter your new total stock here to restock.'
+                : `Current available stock: ${product.stockQuantity} ${product.unit || 'Piece'}`}
+            </small>
+          </label>
           {field('lowStockLevel', 'LOW STOCK LEVEL', 'number')}
           {field('unit', 'UNIT')}
 
@@ -1248,6 +1308,76 @@ function Editor({
           </div>
 
           {error && <p className="validation" style={{ gridColumn: '1 / -1' }}>{error}</p>}
+
+          {duplicateFound && (
+            <div
+              style={{
+                gridColumn: '1 / -1',
+                background: '#1e293b',
+                border: '1px solid #38bdf8',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div>
+                <strong style={{ color: '#38bdf8', fontSize: '13px', display: 'block' }}>
+                  ℹ️ Found Existing Product: "{duplicateFound.name}"
+                </strong>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  Current Stock: <strong style={{ color: duplicateFound.stockQuantity <= 0 ? '#ef4444' : '#f8fafc' }}>{duplicateFound.stockQuantity} {duplicateFound.unit || 'Piece'}</strong> · Code: <strong>#{duplicateFound.code || '---'}</strong>
+                </span>
+                <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#cbd5e1' }}>
+                  No need to delete it! You can restock it or edit it directly:
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  style={{
+                    background: '#10b981',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    close()
+                    onRestockRequest?.(duplicateFound)
+                  }}
+                >
+                  📦 Add Stock to "{duplicateFound.name}"
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    background: '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    setProduct(duplicateFound)
+                    setError('')
+                    setDuplicateFound(null)
+                  }}
+                >
+                  ✏️ Edit This Product
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <footer>
           {item.id ? (
@@ -1272,3 +1402,206 @@ function Editor({
     </div>
   )
 }
+
+function RestockModal({
+  product,
+  close,
+  onSave,
+}: {
+  product: GroceryProduct
+  close: () => void
+  onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void
+}) {
+  const [addQty, setAddQty] = useState('')
+  const [costPrice, setCostPrice] = useState(String(product.costPrice || ''))
+  const [error, setError] = useState('')
+
+  const handleConfirm = (e: React.FormEvent) => {
+    e.preventDefault()
+    const qtyNum = parseFloat(addQty)
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      setError('Please enter a valid positive quantity to add.')
+      return
+    }
+    const costNum = parseFloat(costPrice)
+    const newStock = Math.round((product.stockQuantity + qtyNum) * 100) / 100
+    const newCost = !isNaN(costNum) && costNum >= 0 ? costNum : product.costPrice
+
+    onSave(
+      {
+        ...product,
+        stockQuantity: newStock,
+        costPrice: newCost,
+      },
+      product.id
+    )
+    close()
+  }
+
+  const previewNewTotal =
+    parseFloat(addQty) > 0
+      ? Math.round((product.stockQuantity + parseFloat(addQty)) * 100) / 100
+      : product.stockQuantity
+
+  return (
+    <div className="shade">
+      <form className="dialog custom-dialog" style={{ maxWidth: '440px' }} onSubmit={handleConfirm}>
+        <header>
+          <div>
+            <small style={{ color: '#10b981', fontWeight: 800 }}>INVENTORY RE-STOCK</small>
+            <h2>Add Stock: {product.name}</h2>
+            <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+              Code: #{product.code || '---'} {product.barcode ? `· Barcode: ${product.barcode}` : ''}
+            </p>
+          </div>
+          <button type="button" onClick={close}>×</button>
+        </header>
+
+        <div className="editor-body">
+          <div
+            style={{
+              background: '#1e293b',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              border: '1px solid #334155',
+              marginBottom: '14px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>CURRENT STOCK</span>
+              <strong style={{ fontSize: '18px', color: product.stockQuantity <= 0 ? '#ef4444' : '#f8fafc' }}>
+                {product.stockQuantity} {product.unit || 'Piece'}
+              </strong>
+            </div>
+            {product.stockQuantity <= 0 && (
+              <span
+                style={{
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  padding: '3px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  border: '1px solid #fecaca',
+                }}
+              >
+                OUT OF STOCK
+              </span>
+            )}
+          </div>
+
+          <label style={{ marginBottom: '12px', display: 'block' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>
+              QUANTITY TO ADD (+) *
+            </span>
+            <input
+              type="number"
+              min="0.01"
+              step="any"
+              autoFocus
+              value={addQty}
+              onChange={e => {
+                setAddQty(e.target.value)
+                setError('')
+              }}
+              placeholder="e.g. 50"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                fontSize: '16px',
+                fontWeight: 800,
+                marginTop: '4px',
+                borderRadius: '6px',
+                border: '1px solid #38bdf8',
+                background: '#090e17',
+                color: '#34d399',
+              }}
+              required
+            />
+          </label>
+
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+            {['5', '10', '25', '50', '100'].map(val => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setAddQty(String((parseFloat(addQty) || 0) + Number(val)))}
+                style={{
+                  background: '#1e293b',
+                  color: '#38bdf8',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                +{val}
+              </button>
+            ))}
+          </div>
+
+          <div
+            style={{
+              background: '#0f172a',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              border: '1px dashed #334155',
+              marginBottom: '14px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>New Total Stock After Restock:</span>
+            <strong style={{ fontSize: '15px', color: '#10b981' }}>
+              {previewNewTotal} {product.unit || 'Piece'}
+            </strong>
+          </div>
+
+          <label style={{ display: 'block' }}>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+              COST PRICE PER {product.unit || 'UNIT'} (RS.) - OPTIONAL
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={costPrice}
+              onChange={e => setCostPrice(e.target.value)}
+              placeholder="e.g. 80"
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                fontSize: '13px',
+                marginTop: '4px',
+                borderRadius: '6px',
+                border: '1px solid #334155',
+                background: '#090e17',
+                color: '#f8fafc',
+              }}
+            />
+          </label>
+
+          {error && <p className="validation" style={{ marginTop: '10px' }}>{error}</p>}
+        </div>
+
+        <footer>
+          <button type="button" onClick={close}>Cancel</button>
+          <button
+            type="submit"
+            className="confirm"
+            style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 800 }}
+          >
+            ✓ Confirm &amp; Add Stock
+          </button>
+        </footer>
+      </form>
+    </div>
+  )
+}
+

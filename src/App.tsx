@@ -20,6 +20,7 @@ import { useAuth } from './context/AuthContext'
 import { useSubscription } from './context/SubscriptionContext'
 import { chickenStore, sortChickenItems, type ChickenItem, type PriceHistoryEntry } from './data/chicken'
 import { groceryStore, ensureGroceryCodes, sortGroceryProducts, type GroceryProduct } from './data/grocery'
+import { inventoryStore } from './data/inventory'
 import { storageAdapter } from './services/storageAdapter'
 import { Sales } from './components/Sales'
 import { Customers } from './components/Customers'
@@ -259,12 +260,33 @@ export default function App() {
       saveGrocery(
         grocery.map(item => item.id === id ? { ...item, active: !item.active, updatedAt: new Date().toISOString() } : item)
       ),
-    onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) =>
+    onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => {
+      const nextStock = Number(product.stockQuantity)
+      if (id) {
+        const prev = grocery.find(item => item.id === id)
+        if (prev && Number.isFinite(nextStock) && nextStock !== prev.stockQuantity) {
+          const delta = nextStock - prev.stockQuantity
+          try {
+            inventoryStore.applyLocalChange(
+              grocery,
+              id,
+              delta,
+              delta > 0 ? 'adjustment' : 'adjustment',
+              'Stock Update',
+              `Stock updated from ${prev.stockQuantity} to ${nextStock} via Product Edit`,
+              profile?.full_name || 'Administrator'
+            )
+          } catch {
+            // ignore
+          }
+        }
+      }
       saveGrocery(
         id
-          ? grocery.map(item => item.id === id ? { ...product, stockQuantity: item.stockQuantity, id, createdAt: item.createdAt, updatedAt: new Date().toISOString() } : item)
-          : [...grocery, { ...product, id: `grocery-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]
-      ),
+          ? grocery.map(item => item.id === id ? { ...product, stockQuantity: Number.isFinite(nextStock) ? nextStock : item.stockQuantity, id, createdAt: item.createdAt, updatedAt: new Date().toISOString() } : item)
+          : [...grocery, { ...product, stockQuantity: Number.isFinite(nextStock) ? nextStock : 0, id: `grocery-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]
+      )
+    },
     onDelete: async (id: string) => {
       const next = grocery.filter(item => item.id !== id)
       setGrocery(next)
