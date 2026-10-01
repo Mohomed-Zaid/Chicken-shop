@@ -2057,6 +2057,16 @@ export function PosPayment({
         return
       }
       if (e.key === 'Enter') {
+        const inputVal = scan.trim()
+        if (inputVal) {
+          const processed = processBarcodeOrCode(inputVal)
+          if (processed) {
+            e.preventDefault()
+            setShowSuggestions(false)
+            setHighlightedIndex(-1)
+            return
+          }
+        }
         if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
           e.preventDefault()
           handleSelectSuggestion(suggestions[highlightedIndex])
@@ -2094,6 +2104,25 @@ export function PosPayment({
       barcodeBufferRef.current = ''
       setNotice('')
       return
+    }
+
+    // Match if barcode had leading zeros (e.g. scanner sends "0479..." or db has "0479...")
+    const cleanNoZero = trimmed.replace(/^0+/, '')
+    if (cleanNoZero && cleanNoZero.length >= 3) {
+      const matchNoZero = groceryItems.find(
+        item =>
+          item.active &&
+          item.barcode &&
+          item.barcode.trim().replace(/^0+/, '') === cleanNoZero
+      )
+      if (matchNoZero) {
+        addGrocery(matchNoZero)
+        setScan('')
+        setShowSuggestions(false)
+        barcodeBufferRef.current = ''
+        setNotice('')
+        return
+      }
     }
 
     // Fast check for CH chicken cuts

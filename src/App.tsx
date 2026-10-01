@@ -130,13 +130,23 @@ export default function App() {
               const cloudUpdated = cp.updatedAt ? new Date(cp.updatedAt).getTime() : 0
               const localUpdated = lp.updatedAt ? new Date(lp.updatedAt).getTime() : 0
 
-              // If local was updated more recently and has higher stock (or cloud is 0 while local has stock)
-              if ((localUpdated > cloudUpdated && lp.stockQuantity > cp.stockQuantity) || (cp.stockQuantity === 0 && lp.stockQuantity > 0)) {
-                const preserved = { ...cp, stockQuantity: lp.stockQuantity, updatedAt: lp.updatedAt || new Date().toISOString() }
-                merged.push(preserved)
+              const resolvedBarcode = (cp.barcode && cp.barcode.trim()) ? cp.barcode : (lp.barcode || '')
+              const resolvedCode = (cp.code && cp.code.trim()) ? cp.code : (lp.code || '')
+              const resolvedStock = ((localUpdated > cloudUpdated && lp.stockQuantity > cp.stockQuantity) || (cp.stockQuantity === 0 && lp.stockQuantity > 0))
+                ? lp.stockQuantity
+                : cp.stockQuantity
+
+              const shouldPreserve = resolvedStock !== cp.stockQuantity || resolvedBarcode !== (cp.barcode || '') || resolvedCode !== (cp.code || '')
+              const preserved: GroceryProduct = {
+                ...cp,
+                code: resolvedCode,
+                barcode: resolvedBarcode,
+                stockQuantity: resolvedStock,
+                updatedAt: shouldPreserve ? (lp.updatedAt || new Date().toISOString()) : cp.updatedAt,
+              }
+              merged.push(preserved)
+              if (shouldPreserve) {
                 saveSingleProduct(preserved, cp.stockQuantity).catch(console.warn)
-              } else {
-                merged.push(cp)
               }
             }
           }
