@@ -7226,6 +7226,9 @@ button {
 .thermal-summary-row.discount-row {
   font-weight: 800;
   color: #000000 !important;
+  border-top: 1px dashed #000000;
+  padding-top: 3px;
+  margin-top: 2px;
 }
 
 .thermal-grand-total {
@@ -7736,6 +7739,12 @@ button {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
     font-weight: 800 !important;
+  }
+
+  .thermal-summary-row.discount-row {
+    border-top: 1px dashed #000000 !important;
+    padding-top: 3px !important;
+    margin-top: 2px !important;
   }
 
   .thermal-divider-dashed {

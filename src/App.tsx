@@ -24,7 +24,7 @@ import { inventoryStore } from './data/inventory'
 import { storageAdapter } from './services/storageAdapter'
 import { Sales } from './components/Sales'
 import { Customers } from './components/Customers'
-import { getProducts, saveProducts, deleteProduct } from './services/supabase/productService'
+import { getProducts, saveProducts, saveSingleProduct, deleteProduct } from './services/supabase/productService'
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
 import { fetchSalesFromSupabase } from './services/supabase/salesService'
 import { fetchCustomersFromSupabase, fetchCustomerPaymentsFromSupabase } from './services/supabase/customerService'
@@ -116,13 +116,44 @@ export default function App() {
           localStorage.setItem('sales-transactions', JSON.stringify(merged))
         }
 
+        const localProducts = groceryStore.load()
         if (cloudProducts && cloudProducts.length > 0) {
-          const withCodes = sortGroceryProducts(ensureGroceryCodes(cloudProducts))
+          const processedIds = new Set<string>()
+          const merged: GroceryProduct[] = []
+
+          for (const cp of cloudProducts) {
+            processedIds.add(cp.id)
+            const lp = localProducts.find(item => item.id === cp.id)
+            if (!lp) {
+              merged.push(cp)
+            } else {
+              const cloudUpdated = cp.updatedAt ? new Date(cp.updatedAt).getTime() : 0
+              const localUpdated = lp.updatedAt ? new Date(lp.updatedAt).getTime() : 0
+
+              // If local was updated more recently and has higher stock (or cloud is 0 while local has stock)
+              if ((localUpdated > cloudUpdated && lp.stockQuantity > cp.stockQuantity) || (cp.stockQuantity === 0 && lp.stockQuantity > 0)) {
+                const preserved = { ...cp, stockQuantity: lp.stockQuantity, updatedAt: lp.updatedAt || new Date().toISOString() }
+                merged.push(preserved)
+                saveSingleProduct(preserved, cp.stockQuantity).catch(console.warn)
+              } else {
+                merged.push(cp)
+              }
+            }
+          }
+
+          // Preserve any local products that don't exist in cloud at all
+          for (const lp of localProducts) {
+            if (!processedIds.has(lp.id)) {
+              merged.push(lp)
+              saveSingleProduct(lp, 0).catch(console.warn)
+            }
+          }
+
+          const withCodes = sortGroceryProducts(ensureGroceryCodes(merged))
           setGrocery(withCodes)
           groceryStore.save(withCodes)
         } else {
           // Supabase products table is empty: seed with local products
-          const localProducts = groceryStore.load()
           if (localProducts.length > 0) {
             await saveProducts(localProducts).catch(console.error)
           }
@@ -262,8 +293,12 @@ export default function App() {
       ),
     onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => {
       const nextStock = Number(product.stockQuantity)
+      let prevStock = 0
       if (id) {
         const prev = grocery.find(item => item.id === id)
+        if (prev) {
+          prevStock = prev.stockQuantity
+        }
         if (prev && Number.isFinite(nextStock) && nextStock !== prev.stockQuantity) {
           const delta = nextStock - prev.stockQuantity
           try {
@@ -281,11 +316,36 @@ export default function App() {
           }
         }
       }
-      saveGrocery(
-        id
-          ? grocery.map(item => item.id === id ? { ...product, stockQuantity: Number.isFinite(nextStock) ? nextStock : item.stockQuantity, id, createdAt: item.createdAt, updatedAt: new Date().toISOString() } : item)
-          : [...grocery, { ...product, stockQuantity: Number.isFinite(nextStock) ? nextStock : 0, id: `grocery-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]
-      )
+
+      const targetProduct: GroceryProduct = id
+        ? {
+            ...product,
+            stockQuantity: Number.isFinite(nextStock) ? nextStock : (grocery.find(i => i.id === id)?.stockQuantity || 0),
+            id,
+            createdAt: grocery.find(i => i.id === id)?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : {
+            ...product,
+            stockQuantity: Number.isFinite(nextStock) ? nextStock : 0,
+            id: `grocery-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+
+      const nextList = id
+        ? grocery.map(item => item.id === id ? targetProduct : item)
+        : [...grocery, targetProduct]
+
+      setGrocery(nextList)
+      groceryStore.save(nextList)
+
+      if (storageAdapter.isSupabase()) {
+        saveSingleProduct(targetProduct, prevStock).catch(err => {
+          console.warn('Individual product sync warning:', err)
+          saveProducts(nextList).catch(console.error)
+        })
+      }
     },
     onDelete: async (id: string) => {
       const next = grocery.filter(item => item.id !== id)

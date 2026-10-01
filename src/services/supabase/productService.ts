@@ -1,5 +1,5 @@
 import { sortGroceryProducts, type GroceryProduct, type ProductPackPrice } from '../../data/grocery'
-import { listRows, upsertRows, deleteRow } from './clientHelpers'
+import { listRows, upsertRows, deleteRow, requireSupabase } from './clientHelpers'
 
 export type ProductPackPriceRow = {
   id: string
@@ -139,10 +139,57 @@ export const getProducts = async (): Promise<GroceryProduct[]> => {
   return sortGroceryProducts(rows.map(row => rowToProduct(row, packMap.get(row.id) || [])))
 }
 
-export const saveProducts = async (products: GroceryProduct[]) => {
-  await upsertRows('products', products.map(productToRow))
+export const saveSingleProduct = async (product: GroceryProduct, previousStock?: number): Promise<void> => {
+  const row = productToRow(product)
 
-  // Upsert all pack rules for products that have them
+  // 1. Try dedicated save_product_with_stock RPC first if available
+  try {
+    const db = requireSupabase()
+    const { error: rpcErr } = await db.rpc('save_product_with_stock', {
+      product_payload: row,
+    })
+    if (!rpcErr) {
+      await syncProductPackPrices([product])
+      return
+    }
+  } catch {
+    // Proceed to standard upsert fallback
+  }
+
+  // 2. Direct upsert
+  try {
+    await upsertRows('products', [row])
+    await syncProductPackPrices([product])
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    // If blocked by trigger prevent_direct_stock_update
+    if (errMsg.includes('Stock quantity') || errMsg.includes('stock transactions')) {
+      const prev = previousStock !== undefined ? previousStock : 0
+      const delta = product.stockQuantity - prev
+
+      // Upsert product row retaining previous stock
+      const safeRow = { ...row, stock_quantity: prev }
+      await upsertRows('products', [safeRow])
+
+      // Adjust stock via authorized adjust_stock RPC
+      if (delta !== 0) {
+        const db = requireSupabase()
+        await db.rpc('adjust_stock', {
+          p_product_id: product.id,
+          p_delta: delta,
+          p_movement_type: 'adjustment',
+          p_reason: 'Stock update via Product Catalog',
+          p_notes: `Stock changed from ${prev} to ${product.stockQuantity}`,
+        })
+      }
+      await syncProductPackPrices([product])
+    } else {
+      throw err
+    }
+  }
+}
+
+const syncProductPackPrices = async (products: GroceryProduct[]) => {
   const allPackRows: ProductPackPriceRow[] = []
   for (const p of products) {
     if (p.packPrices && Array.isArray(p.packPrices)) {
@@ -170,5 +217,44 @@ export const saveProducts = async (products: GroceryProduct[]) => {
   }
 }
 
+export const saveProducts = async (products: GroceryProduct[]) => {
+  if (!products.length) return
+
+  // 1. Try bulk RPC first
+  try {
+    const db = requireSupabase()
+    const { error: bulkErr } = await db.rpc('bulk_sync_products_with_stock', {
+      products_payload: products.map(productToRow),
+    })
+    if (!bulkErr) {
+      await syncProductPackPrices(products)
+      return
+    }
+  } catch {
+    // Proceed to standard fallback
+  }
+
+  // 2. Standard batch upsert
+  try {
+    await upsertRows('products', products.map(productToRow))
+    await syncProductPackPrices(products)
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    if (errMsg.includes('Stock quantity') || errMsg.includes('stock transactions')) {
+      // Fallback: save products individually with stock adjustment
+      for (const p of products) {
+        try {
+          await saveSingleProduct(p, p.stockQuantity)
+        } catch (innerErr) {
+          console.warn(`Could not sync product ${p.name}:`, innerErr)
+        }
+      }
+    } else {
+      throw err
+    }
+  }
+}
+
 export const deleteProduct = (id: string) => deleteRow('products', id)
+
 

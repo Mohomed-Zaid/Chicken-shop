@@ -1,4 +1,4 @@
-import { listRows, upsertRows } from './clientHelpers'
+import { listRows, upsertRows, requireSupabase } from './clientHelpers'
 import type { Purchase } from '../../data/purchases'
 
 export const getPurchases = () => listRows('purchases')
@@ -57,6 +57,36 @@ export const savePurchaseToSupabase = async (purchase: Purchase) => {
     await savePurchases([purchaseRow])
     if (itemRows.length > 0) {
       await savePurchaseItems(itemRows)
+    }
+
+    // 2. Increment stock in Supabase for all received grocery products
+    const groceryLines = purchase.items.filter(item => item.productType !== 'chicken')
+    for (const item of groceryLines) {
+      if (item.productId && item.quantity > 0) {
+        try {
+          const db = requireSupabase()
+          const { error: rpcErr } = await db.rpc('receive_purchase_stock', {
+            p_product_id: item.productId,
+            p_quantity: item.quantity,
+            p_reference_id: purchase.id,
+            p_reference_number: purchase.purchaseNumber,
+            p_reason: 'Completed purchase'
+          })
+          if (rpcErr) {
+            await db.rpc('adjust_stock', {
+              p_product_id: item.productId,
+              p_delta: item.quantity,
+              p_movement_type: 'purchase',
+              p_reason: 'Completed purchase',
+              p_notes: `Purchase ${purchase.purchaseNumber}`,
+              p_reference_id: purchase.id,
+              p_reference_number: purchase.purchaseNumber
+            })
+          }
+        } catch (stockErr) {
+          console.warn(`Could not sync purchase stock for ${item.productName}:`, stockErr)
+        }
+      }
     }
   } catch (err) {
     console.error('Failed to sync purchase to Supabase:', err)
