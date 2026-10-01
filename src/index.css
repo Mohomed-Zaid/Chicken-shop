@@ -5932,7 +5932,7 @@ button {
 
 .pos-cart-header {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 52px 75px 84px 75px 28px;
+  grid-template-columns: minmax(110px, 1fr) 50px 82px 84px 75px 28px;
   gap: 6px;
   align-items: center;
   padding: 8px 14px;
@@ -5953,7 +5953,7 @@ button {
 
 .pos-cart-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 52px 75px 84px 75px 28px;
+  grid-template-columns: minmax(110px, 1fr) 50px 82px 84px 75px 28px;
   gap: 6px;
   align-items: center;
   padding: 9px 14px;
@@ -6025,6 +6025,12 @@ button {
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
   -moz-appearance: textfield;
+}
+
+.input-rate-inline {
+  width: 56px;
+  text-align: right;
+  padding: 0 4px;
 }
 
 .input-qty-inline::-webkit-outer-spin-button,

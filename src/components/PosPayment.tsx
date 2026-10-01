@@ -49,6 +49,7 @@ type GroceryCartItem = {
   packPricingApplied?: boolean
   packBreakdown?: PackBreakdownItem[]
   packsDescription?: string
+  customPriceApplied?: boolean
   total: number
 }
 type Cart = ChickenCartItem | GroceryCartItem
@@ -106,6 +107,75 @@ function CartItemQtyInput({
         if (e.key === 'Enter') {
           e.preventDefault()
           commit(val)
+          onEnter?.()
+        }
+      }}
+      onKeyUp={e => e.stopPropagation()}
+    />
+  )
+}
+
+
+function CartItemRateInput({
+  rate,
+  onChangeRate,
+  onEnter,
+  min = 0,
+}: {
+  rate: number
+  onChangeRate: (newRate: number) => void
+  onEnter?: () => void
+  min?: number
+}) {
+  const [val, setVal] = useState(String(rate))
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (!isFocused) {
+      setVal(String(rate))
+    }
+  }, [rate, isFocused])
+
+  const commit = (inputStr: string) => {
+    const parsed = parseFloat(inputStr)
+    if (Number.isFinite(parsed) && parsed >= min) {
+      onChangeRate(parsed)
+      setVal(String(parsed))
+    } else {
+      setVal(String(rate))
+    }
+  }
+
+  return (
+    <input
+      type="number"
+      step="any"
+      min={min}
+      className="input-qty-inline input-rate-inline"
+      value={val}
+      aria-label="Rate"
+      onFocus={e => {
+        setIsFocused(true)
+        e.target.select()
+      }}
+      onChange={e => {
+        const next = e.target.value
+        setVal(next)
+        const parsed = parseFloat(next)
+        if (Number.isFinite(parsed) && parsed >= min) {
+          onChangeRate(parsed)
+        }
+      }}
+      onBlur={() => {
+        setIsFocused(false)
+        commit(val)
+      }}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit(val)
+          e.currentTarget.blur()
           onEnter?.()
         }
       }}
@@ -1152,8 +1222,6 @@ export function PosPayment({
   const [rateInput, setRateInput] = useState('')
   const [isCustomRateApplied, setIsCustomRateApplied] = useState(false)
   const [savePermanently, setSavePermanently] = useState(false)
-  const [editingCartChickenRateId, setEditingCartChickenRateId] = useState<string | null>(null)
-  const [editingCartRateValue, setEditingCartRateValue] = useState<string>('')
   const weightInputRef = useRef<HTMLInputElement>(null)
   const [cart, setCart] = useState<Cart[]>([])
   const [scan, setScan] = useState('')
@@ -1515,27 +1583,37 @@ export function PosPayment({
     setNotice('')
   }
 
-  const applyCartChickenRate = (cartItemId: string) => {
-    const val = parseFloat(editingCartRateValue)
-    if (!Number.isFinite(val) || val <= 0) {
-      setNotice('Please enter a valid rate per kg.')
-      setEditingCartChickenRateId(null)
-      return
-    }
+  const setChickenItemRate = (cartItemId: string, newRate: number) => {
+    if (!Number.isFinite(newRate) || newRate <= 0) return
     setCart(current =>
       current.map(i => {
         if (i.id !== cartItemId || i.kind !== 'chicken') return i
-        const newTotal = calculateChickenPrice(i.weightGrams, val)
+        const newTotal = calculateChickenPrice(i.weightGrams, newRate)
         return {
           ...i,
-          pricePerKg: val,
+          pricePerKg: newRate,
           unitPrice: newTotal,
           total: newTotal,
         }
       })
     )
-    setEditingCartChickenRateId(null)
-    setNotice(`Updated rate to ${formatMoney(val)}/kg`)
+  }
+
+  const setGroceryItemRate = (cartItemId: string, newRate: number) => {
+    if (!Number.isFinite(newRate) || newRate < 0) return
+    setCart(current =>
+      current.map(i => {
+        if (i.id !== cartItemId || i.kind !== 'grocery') return i
+        const qty = i.paidQuantity ?? i.quantity
+        const newTotal = Math.round(newRate * qty * 100) / 100
+        return {
+          ...i,
+          unitPrice: newRate,
+          total: newTotal,
+          customPriceApplied: true,
+        }
+      })
+    )
   }
 
   const resolveItemPricing = (
@@ -1698,8 +1776,8 @@ export function PosPayment({
           ? {
             ...item,
             quantity: nextQty,
-            unitPrice: pricing.unitPrice,
-            priceType: pricing.priceType,
+            unitPrice: item.customPriceApplied ? item.unitPrice : pricing.unitPrice,
+            priceType: item.customPriceApplied ? item.priceType : pricing.priceType,
             paidQuantity: pricing.promo.paidQuantity,
             freeQuantity: pricing.promo.freeQuantity,
             totalQuantity: pricing.promo.totalQuantity,
@@ -1707,7 +1785,9 @@ export function PosPayment({
             packPricingApplied: pricing.packPricingApplied,
             packBreakdown: pricing.packBreakdown,
             packsDescription: pricing.packsDescription,
-            total: pricing.total,
+            total: item.customPriceApplied
+              ? Math.round(item.unitPrice * (pricing.promo.paidQuantity ?? nextQty) * 100) / 100
+              : pricing.total,
           }
           : i
       )
@@ -1746,8 +1826,8 @@ export function PosPayment({
           ? {
             ...item,
             quantity: directQty,
-            unitPrice: pricing.unitPrice,
-            priceType: pricing.priceType,
+            unitPrice: item.customPriceApplied ? item.unitPrice : pricing.unitPrice,
+            priceType: item.customPriceApplied ? item.priceType : pricing.priceType,
             paidQuantity: pricing.promo.paidQuantity,
             freeQuantity: pricing.promo.freeQuantity,
             totalQuantity: pricing.promo.totalQuantity,
@@ -1755,7 +1835,9 @@ export function PosPayment({
             packPricingApplied: pricing.packPricingApplied,
             packBreakdown: pricing.packBreakdown,
             packsDescription: pricing.packsDescription,
-            total: pricing.total,
+            total: item.customPriceApplied
+              ? Math.round(item.unitPrice * (pricing.promo.paidQuantity ?? directQty) * 100) / 100
+              : pricing.total,
           }
           : i
       )
@@ -2103,7 +2185,7 @@ export function PosPayment({
 
       const regularSubtotal = cart.reduce((sum, item) => {
         if (item.kind === 'chicken') return sum + item.total
-        const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE')
+        const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE' || (item.kind === 'grocery' && item.customPriceApplied))
           ? item.unitPrice
           : (item.product.retailPrice !== undefined && item.product.retailPrice !== null ? item.product.retailPrice : item.product.sellingPrice)
         return sum + (itemPrice * item.quantity)
@@ -2220,7 +2302,7 @@ export function PosPayment({
   const regularSubtotal = useMemo(() => {
     return cart.reduce((sum, item) => {
       if (item.kind === 'chicken') return sum + item.total
-      const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE')
+      const itemPrice = (item.priceType === 'WHOLESALE' || item.sellingMode === 'WHOLESALE' || (item.kind === 'grocery' && item.customPriceApplied))
         ? item.unitPrice
         : (item.product.retailPrice !== undefined && item.product.retailPrice !== null ? item.product.retailPrice : item.product.sellingPrice)
       return sum + (itemPrice * item.quantity)
@@ -3099,120 +3181,37 @@ export function PosPayment({
 
                     <div className="col-rate">
                       {item.kind === 'chicken' ? (
-                        editingCartChickenRateId === item.id ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              value={editingCartRateValue}
-                              onChange={e => setEditingCartRateValue(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  applyCartChickenRate(item.id)
-                                } else if (e.key === 'Escape') {
-                                  e.preventDefault()
-                                  setEditingCartChickenRateId(null)
-                                }
-                              }}
-                              autoFocus
-                              style={{
-                                width: '68px',
-                                padding: '2px 4px',
-                                fontSize: '11px',
-                                background: '#090e17',
-                                border: '1px solid #38bdf8',
-                                borderRadius: '3px',
-                                color: '#fff',
-                                fontWeight: 700,
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => applyCartChickenRate(item.id)}
-                              style={{
-                                background: '#0284c7',
-                                border: 'none',
-                                color: '#fff',
-                                borderRadius: '3px',
-                                padding: '2px 5px',
-                                fontSize: '10px',
-                                cursor: 'pointer',
-                                fontWeight: 700,
-                              }}
-                              title="Apply rate"
-                            >
-                              ✓
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingCartChickenRateId(null)}
-                              style={{
-                                background: '#334155',
-                                border: 'none',
-                                color: '#cbd5e1',
-                                borderRadius: '3px',
-                                padding: '2px 5px',
-                                fontSize: '10px',
-                                cursor: 'pointer',
-                              }}
-                              title="Cancel"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <span>{formatMoney(item.pricePerKg)}/kg</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingCartChickenRateId(item.id)
-                                setEditingCartRateValue(String(item.pricePerKg))
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#38bdf8',
-                                cursor: 'pointer',
-                                padding: '0 2px',
-                                fontSize: '11px',
-                                opacity: 0.8,
-                              }}
-                              title="Edit rate for this chicken item"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                        )
-                      ) : item.kind === 'grocery' && item.packPricingApplied ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
-                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>
-                            {formatMoney(item.unitPrice)}
-                          </span>
-                          <small style={{ color: '#38bdf8', fontSize: '10px' }}>Pack rate</small>
-                        </div>
-                      ) : item.priceType === 'WHOLESALE' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
-                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>
-                            {formatMoney(item.unitPrice)}
-                          </span>
-                          <small style={{ color: '#94a3b8', fontSize: '10px' }}>Wholesale</small>
-                        </div>
-                      ) : item.product.discountPrice &&
-                        item.product.discountPrice > 0 &&
-                        item.product.discountPrice < (item.product.retailPrice ?? item.product.sellingPrice) ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
-                          <del style={{ color: '#94a3b8', fontSize: '11px', textDecoration: 'line-through' }}>
-                            {formatMoney(item.product.retailPrice ?? item.product.sellingPrice)}
-                          </del>
-                          <span style={{ color: '#10b981', fontWeight: 700 }}>
-                            {formatMoney(item.product.discountPrice)}
-                          </span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <CartItemRateInput
+                            rate={item.pricePerKg}
+                            min={1}
+                            onChangeRate={newRate => setChickenItemRate(item.id, newRate)}
+                            onEnter={() => {
+                              scanInputRef.current?.focus()
+                              scanInputRef.current?.select()
+                            }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>/kg</span>
                         </div>
                       ) : (
-                        formatMoney(item.unitPrice)
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '1px' }}>
+                          <CartItemRateInput
+                            rate={item.unitPrice}
+                            min={0}
+                            onChangeRate={newRate => setGroceryItemRate(item.id, newRate)}
+                            onEnter={() => {
+                              scanInputRef.current?.focus()
+                              scanInputRef.current?.select()
+                            }}
+                          />
+                          {item.customPriceApplied ? (
+                            <small style={{ color: '#f59e0b', fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>Custom</small>
+                          ) : item.packPricingApplied ? (
+                            <small style={{ color: '#38bdf8', fontSize: '9px', fontWeight: 600, lineHeight: 1 }}>Pack rate</small>
+                          ) : item.priceType === 'WHOLESALE' ? (
+                            <small style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 600, lineHeight: 1 }}>Wholesale</small>
+                          ) : null}
+                        </div>
                       )}
                     </div>
 
