@@ -120,11 +120,36 @@ section.receipt.sinhala-receipt .receipt-labels strong {
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: #101820;
   color: #e9eef2;
   font: 14px Inter, Arial, sans-serif;
+  min-height: 100%;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: clip;
 }
 
 button,
@@ -138,7 +163,9 @@ button {
 
 .app {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
+  flex: 1;
 }
 
 .sidebar {
@@ -1220,11 +1247,17 @@ button {
 .shade {
   position: fixed;
   inset: 0;
-  background: #071018ba;
-  display: grid;
-  place-items: center;
+  background: rgba(7, 16, 24, 0.88);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 18px;
-  z-index: 5;
+  z-index: 1050;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 .dialog {
@@ -8893,9 +8926,11 @@ button {
 
   /* App Layout on Mobile */
   .app-container {
-    width: 100vw;
-    max-width: 100vw;
-    overflow-x: hidden;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    overflow-x: clip !important;
   }
 
   .app {
@@ -8903,8 +8938,9 @@ button {
     flex-direction: column !important;
     width: 100% !important;
     min-width: 0 !important;
-    min-height: 100vh !important;
-    padding-bottom: calc(68px + env(safe-area-inset-bottom, 12px)) !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding-bottom: calc(74px + env(safe-area-inset-bottom, 16px)) !important;
     box-sizing: border-box !important;
   }
 
@@ -8913,10 +8949,12 @@ button {
     display: flex !important;
     align-items: center;
     justify-content: space-between;
-    height: 52px;
+    height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-left: calc(12px + env(safe-area-inset-left, 0px)) !important;
+    padding-right: calc(12px + env(safe-area-inset-right, 0px)) !important;
     background: #17202a;
     border-bottom: 1px solid #283645;
-    padding: 0 12px;
     position: sticky;
     top: 0;
     z-index: 800;
@@ -8933,6 +8971,7 @@ button {
     justify-content: center;
     border-radius: 6px;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .mobile-hamburger-btn:active {
@@ -8944,6 +8983,7 @@ button {
     align-items: center;
     gap: 8px;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .mobile-brand-img {
@@ -8995,6 +9035,7 @@ button {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   /* Slide-Out Navigation Drawer */
@@ -9004,7 +9045,8 @@ button {
     inset: 0;
     background: rgba(10, 15, 20, 0.72);
     backdrop-filter: blur(4px);
-    z-index: 1000;
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1100 !important;
     animation: fadeIn 0.18s ease;
   }
 
@@ -9019,6 +9061,8 @@ button {
     box-shadow: 6px 0 24px rgba(0, 0, 0, 0.5);
     animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .mobile-drawer-header {
@@ -9057,6 +9101,7 @@ button {
     padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .mobile-drawer-close:hover {
@@ -9104,7 +9149,7 @@ button {
 
   .mobile-drawer-dues-btn {
     width: 100%;
-    padding: 6px;
+    padding: 8px;
     background: #ef4444;
     color: #ffffff;
     border: none;
@@ -9112,11 +9157,13 @@ button {
     font-size: 11px;
     font-weight: 800;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .mobile-drawer-nav {
     flex: 1;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 10px 8px;
     display: flex;
     flex-direction: column;
@@ -9139,6 +9186,7 @@ button {
     transition: all 0.15s ease;
     width: 100%;
     position: relative;
+    touch-action: manipulation;
   }
 
   .mobile-drawer-item.active {
@@ -9182,7 +9230,7 @@ button {
     gap: 8px;
     justify-content: center;
     width: 100%;
-    padding: 9px;
+    padding: 10px;
     background: rgba(239, 68, 68, 0.12);
     border: 1px solid rgba(239, 68, 68, 0.25);
     color: #f87171;
@@ -9190,6 +9238,7 @@ button {
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   /* Fixed Mobile Bottom Navigation Bar */
@@ -9199,15 +9248,17 @@ button {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(20, 28, 38, 0.97);
+    height: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background: rgba(18, 25, 34, 0.98);
     backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid #283748;
     z-index: 950;
-    align-items: stretch;
+    align-items: center;
     justify-content: space-around;
-    box-shadow: 0 -3px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    overscroll-behavior: contain;
   }
 
   .mobile-bottom-nav-btn {
@@ -9226,6 +9277,7 @@ button {
     transition: color 0.15s ease, transform 0.1s ease;
     padding: 4px 0;
     min-height: 48px;
+    touch-action: manipulation;
   }
 
   .mobile-bottom-nav-btn.active {
@@ -9246,11 +9298,15 @@ button {
     text-align: center;
   }
 
-  /* 3. Page Header and Main Layouts on Mobile */
+  /* 3. Page Header and Main Layouts on Mobile - Natural Smooth Scrolling */
   .prices-page {
+    flex: none !important;
+    width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
     padding: 14px 12px !important;
     box-sizing: border-box !important;
-    width: 100% !important;
   }
 
   .page-header {
@@ -9274,6 +9330,23 @@ button {
     gap: 8px !important;
   }
 
+  /* Dashboard mobile layout */
+  .bi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .bi-card {
+    min-height: 84px !important;
+    padding: 10px !important;
+    touch-action: manipulation !important;
+  }
+
+  .price-overview {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
   /* 4. Table Containers: Smooth Touch Horizontal Scrolling */
   .price-table,
   .sales-table-container,
@@ -9283,6 +9356,7 @@ button {
   .ledger-table-container {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
     width: 100% !important;
     border-radius: 8px !important;
   }
@@ -9296,19 +9370,59 @@ button {
     min-width: 780px !important;
   }
 
-  /* 5. Mobile Modals */
-  .shade .dialog,
+  .price-row.table-head,
+  .price-row {
+    min-width: 580px;
+  }
+
+  /* 5. Mobile Modals - Scrollable with overlay above navigation */
+  .shade {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(5, 10, 16, 0.88) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding: 14px 10px calc(84px + env(safe-area-inset-bottom, 20px)) !important;
+    z-index: 1050 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
+    box-sizing: border-box !important;
+  }
+
+  .dialog,
   .custom-dialog,
   .modal-dialog,
   .payment-modal,
-  .weight-modal-dialog {
-    width: 95vw !important;
-    max-width: 95vw !important;
-    max-height: 90vh !important;
-    overflow-y: auto !important;
+  .pos-payment-modal,
+  .weight-modal-dialog,
+  .supplier-dialog,
+  .inventory-dialog,
+  .product-editor {
+    width: 100% !important;
+    max-width: 500px !important;
+    max-height: none !important;
+    height: auto !important;
     margin: 8px auto !important;
-    padding: 16px !important;
+    border-radius: 12px !important;
+    overflow: visible !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6) !important;
     box-sizing: border-box !important;
+  }
+
+  .editor-body,
+  .product-fields,
+  .pos-payment-modal .editor-body {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .quick-weight-btn {
+    min-height: 52px !important;
+    touch-action: manipulation !important;
   }
 
   /* Touch-friendly inputs: 16px prevents iOS Safari auto-zoom */
@@ -9316,13 +9430,52 @@ button {
   input[type="number"],
   input[type="search"],
   input[type="password"],
-  select {
+  input[type="date"],
+  select,
+  textarea {
     font-size: 16px !important;
   }
 }
 
 /* 6. POS Responsive Segment Control (Screens <= 900px) */
 @media (max-width: 900px) {
+  .pos-workspace {
+    flex: none !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding: 6px 8px calc(24px) !important;
+    box-sizing: border-box !important;
+    gap: 8px !important;
+  }
+
+  /* POS Live Header simplification on mobile */
+  .pos-top-header {
+    display: flex !important;
+    height: auto !important;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    gap: 8px !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .pos-header-brand {
+    display: none !important;
+  }
+
+  .pos-header-center {
+    order: 1 !important;
+    margin: 0 !important;
+  }
+
+  .pos-header-right {
+    order: 2 !important;
+    gap: 6px !important;
+  }
+
   .pos-mobile-nav-tabs {
     display: flex !important;
     background: #111a24;
@@ -9330,17 +9483,17 @@ button {
     border-radius: 10px;
     padding: 4px;
     gap: 6px;
-    margin: 10px 12px 6px;
+    margin: 6px 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
   .pos-mobile-nav-tab {
     flex: 1;
-    height: 42px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     background: transparent;
     border: none;
     border-radius: 7px;
@@ -9349,6 +9502,7 @@ button {
     font-weight: 700;
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
   }
 
   .pos-mobile-nav-tab.active {
@@ -9372,9 +9526,20 @@ button {
     color: #fde047;
   }
 
+  .pos-main-container {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    gap: 10px !important;
+  }
+
   .pos-mobile-catalog-toggle-row {
     display: block !important;
-    padding: 6px 12px 10px;
+    padding: 6px 4px 10px;
   }
 
   .pos-mobile-back-catalog-btn {
@@ -9388,18 +9553,163 @@ button {
     font-weight: 700;
     cursor: pointer;
     text-align: center;
+    touch-action: manipulation;
   }
 
-  .pos-cart-panel.mobile-hide,
-  .pos-catalog-panel.mobile-hide {
+  /* Catalog Panel & Views: completely unconstrained vertical flow */
+  .pos-catalog-panel.mobile-hide,
+  .pos-cart-panel.mobile-hide {
     display: none !important;
   }
 
-  .pos-cart-panel.mobile-show,
   .pos-catalog-panel.mobile-show {
     display: flex !important;
+    flex-direction: column !important;
     width: 100% !important;
     min-width: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    border-radius: 10px !important;
+    background: #141f2a !important;
+  }
+
+  .catalog-tabs-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: auto !important;
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+
+  .catalog-tab-btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    font-size: 12px !important;
+    border-radius: 6px !important;
+    touch-action: manipulation !important;
+  }
+
+  .pos-selling-mode-selector {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 2px !important;
+  }
+
+  .pos-selling-mode-selector .pos-mode-btn {
+    flex: 1 !important;
+    justify-content: center !important;
+    height: 40px !important;
+    touch-action: manipulation !important;
+  }
+
+  .catalog-content-area,
+  .chicken-catalog-view,
+  .grocery-catalog-view {
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    flex: none !important;
+    padding: 6px 4px !important;
+  }
+
+  .chicken-cards-grid,
+  .grocery-cards-grid {
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    flex: none !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding-right: 0 !important;
+  }
+
+  .chicken-card-btn,
+  .grocery-card-btn {
+    min-height: 96px !important;
+    padding: 10px !important;
+    touch-action: manipulation !important;
+  }
+
+  .cut-name {
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+  }
+
+  .cut-price {
+    font-size: 14.5px !important;
+  }
+
+  /* Cart / Current Bill Panel: natural vertical scroll with visible totals & pay button */
+  .pos-cart-panel.mobile-show {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    border-radius: 10px !important;
+    background: #141f2a !important;
+  }
+
+  .pos-bill-header {
+    padding: 8px 10px !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .bill-header-actions {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .pos-cart-table-wrapper {
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
+    flex: none !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+  }
+
+  .pos-cart-header,
+  .pos-cart-row {
+    min-width: 470px !important;
+  }
+
+  .pos-cart-body {
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+
+  .pos-bill-footer {
+    position: static !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+    border-radius: 8px !important;
+    background: #182532 !important;
+    padding: 12px 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  .pos-btn-pay-main {
+    height: 54px !important;
+    font-size: 16px !important;
+    touch-action: manipulation !important;
   }
 
   /* Floating Quick Cart Bar */
@@ -9408,9 +9718,9 @@ button {
     align-items: center;
     justify-content: space-between;
     position: fixed;
-    bottom: calc(66px + env(safe-area-inset-bottom, 10px));
-    left: 12px;
-    right: 12px;
+    bottom: calc(66px + env(safe-area-inset-bottom, 8px)) !important;
+    left: 10px;
+    right: 10px;
     height: 52px;
     background: linear-gradient(135deg, #0284c7, #0369a1);
     color: #ffffff;
@@ -9419,6 +9729,7 @@ button {
     box-shadow: 0 8px 24px rgba(2, 132, 199, 0.5);
     z-index: 850;
     cursor: pointer;
+    touch-action: manipulation;
     animation: slideUpQuickCart 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -9462,24 +9773,7 @@ button {
     padding: 7px 12px;
     border-radius: 7px;
     cursor: pointer;
-  }
-
-  /* POS Top Header simplification on mobile */
-  .pos-top-header {
-    height: auto !important;
-    padding: 8px 12px !important;
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-  }
-
-  .pos-header-center {
-    order: 3;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .pos-workspace {
-    padding: 4px 6px 12px !important;
+    touch-action: manipulation;
   }
 
   /* Receipt Modal on Mobile */
@@ -9523,6 +9817,7 @@ button {
     height: 42px;
     font-size: 12px;
     padding: 0 8px;
+    touch-action: manipulation;
   }
 
   .receipt-modal-actions .btn-print-receipt {

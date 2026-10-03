@@ -1906,14 +1906,22 @@ export function PosPayment({
     const rawTrimmed = rawInput.trim()
     if (!rawTrimmed) return false
 
-    // Clean control characters (\r, \n) often sent by hardware barcode scanners
-    const cleanStr = rawTrimmed.replace(/[\r\n\t]/g, '').trim()
+    // Clean control characters (\r, \n, non-printable ASCII) often sent by hardware barcode scanners
+    let cleanStr = rawTrimmed.replace(/[\r\n\t\x00-\x1F\x7F-\x9F]/g, '').trim()
+    // Strip common AIM Code Identifiers if scanner prefixes them (e.g. ]E0, ]e0, ]C1, ]A0)
+    cleanStr = cleanStr.replace(/^\][a-zA-Z0-9]{1,2}/, '').trim()
     if (!cleanStr) return false
 
+    const normClean = cleanStr.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+
     // 1. EXACT BARCODE MATCH FIRST (Highest Priority for barcode scanners)
-    const productByBarcode = groceryItems.find(
-      item => item.active && item.barcode && item.barcode.trim().toLowerCase() === cleanStr.toLowerCase()
-    )
+    const productByBarcode = groceryItems.find(item => {
+      if (!item.active || !item.barcode) return false
+      const bTrim = item.barcode.trim().toLowerCase()
+      if (bTrim === cleanStr.toLowerCase()) return true
+      const bNorm = item.barcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+      return Boolean(bNorm && bNorm === normClean)
+    })
     if (productByBarcode) {
       addGrocery(productByBarcode)
       setScan('')
@@ -1924,13 +1932,15 @@ export function PosPayment({
 
     // Match if barcode had leading zeros (e.g. scanner sends "0479..." or db has "0479...")
     const cleanNoZero = cleanStr.replace(/^0+/, '')
+    const normCleanNoZero = normClean.replace(/^0+/, '')
     if (cleanNoZero) {
-      const productByBarcodeNoZero = groceryItems.find(
-        item =>
-          item.active &&
-          item.barcode &&
-          item.barcode.trim().replace(/^0+/, '') === cleanNoZero
-      )
+      const productByBarcodeNoZero = groceryItems.find(item => {
+        if (!item.active || !item.barcode) return false
+        const bNoZero = item.barcode.trim().replace(/^0+/, '')
+        if (bNoZero && bNoZero === cleanNoZero) return true
+        const bNormNoZero = item.barcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().replace(/^0+/, '')
+        return Boolean(bNormNoZero && bNormNoZero === normCleanNoZero)
+      })
       if (productByBarcodeNoZero) {
         addGrocery(productByBarcodeNoZero)
         setScan('')
@@ -1938,6 +1948,19 @@ export function PosPayment({
         setNotice('')
         return true
       }
+    }
+
+    // Check if product exists with this barcode but is marked inactive
+    const inactiveMatch = groceryItems.find(item => {
+      if (!item.barcode) return false
+      const bNorm = item.barcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+      return Boolean(bNorm && (bNorm === normClean || bNorm.replace(/^0+/, '') === normCleanNoZero))
+    })
+    if (inactiveMatch && !inactiveMatch.active) {
+      setNotice(`⚠️ Product "${inactiveMatch.name}" is marked INACTIVE in Inventory. Enable it to sell.`)
+      setScan('')
+      barcodeBufferRef.current = ''
+      return false
     }
 
     // 2. CHICKEN CUT CODE MATCH (1-99 or starting with CH)
@@ -2093,10 +2116,19 @@ export function PosPayment({
     const trimmed = val.trim()
     if (!trimmed) return
 
+    let cleanTrimmed = trimmed.replace(/[\r\n\t\x00-\x1F\x7F-\x9F]/g, '').trim()
+    cleanTrimmed = cleanTrimmed.replace(/^\][a-zA-Z0-9]{1,2}/, '').trim()
+    if (!cleanTrimmed) return
+    const normTrimmed = cleanTrimmed.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+
     // Fast check: if the typed/scanned string matches ANY active grocery barcode exactly, add immediately!
-    const exactBarcodeMatch = groceryItems.find(
-      item => item.active && item.barcode && item.barcode.trim().toLowerCase() === trimmed.toLowerCase()
-    )
+    const exactBarcodeMatch = groceryItems.find(item => {
+      if (!item.active || !item.barcode) return false
+      const bTrim = item.barcode.trim().toLowerCase()
+      if (bTrim === cleanTrimmed.toLowerCase()) return true
+      const bNorm = item.barcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+      return Boolean(bNorm && bNorm === normTrimmed)
+    })
     if (exactBarcodeMatch) {
       addGrocery(exactBarcodeMatch)
       setScan('')
@@ -2107,14 +2139,16 @@ export function PosPayment({
     }
 
     // Match if barcode had leading zeros (e.g. scanner sends "0479..." or db has "0479...")
-    const cleanNoZero = trimmed.replace(/^0+/, '')
+    const cleanNoZero = cleanTrimmed.replace(/^0+/, '')
+    const normTrimmedNoZero = normTrimmed.replace(/^0+/, '')
     if (cleanNoZero && cleanNoZero.length >= 3) {
-      const matchNoZero = groceryItems.find(
-        item =>
-          item.active &&
-          item.barcode &&
-          item.barcode.trim().replace(/^0+/, '') === cleanNoZero
-      )
+      const matchNoZero = groceryItems.find(item => {
+        if (!item.active || !item.barcode) return false
+        const bNoZero = item.barcode.trim().replace(/^0+/, '')
+        if (bNoZero && bNoZero === cleanNoZero) return true
+        const bNormNoZero = item.barcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().replace(/^0+/, '')
+        return Boolean(bNormNoZero && bNormNoZero === normTrimmedNoZero)
+      })
       if (matchNoZero) {
         addGrocery(matchNoZero)
         setScan('')

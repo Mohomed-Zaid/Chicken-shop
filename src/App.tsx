@@ -375,11 +375,11 @@ export default function App() {
   const denied = adminPages.includes(page) && !isAdmin
 
   return (
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className="app-container">
       <PwaUpdatePrompt />
       <PwaInstallPrompt />
       <SubscriptionBanner />
-      <main className="app" style={{ flex: 1 }}>
+      <main className="app">
         <Navigation active={page} onNavigate={handleNavigate} profile={profile} onLogout={signOut} isAdmin={isAdmin} />
         {denied ? (
           <AccessDenied />
