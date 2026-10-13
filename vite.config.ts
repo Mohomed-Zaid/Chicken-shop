@@ -3,8 +3,41 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+function neonDevServerPlugin() {
+  return {
+    name: 'neon-dev-server',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        const url = req.url?.split('?')[0]
+        if (url === '/api/db') {
+          try {
+            const { default: handler } = await import('./api/db.ts')
+            await handler(req, res)
+          } catch (e: any) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: e.message }))
+          }
+          return
+        }
+        if (url === '/api/auth') {
+          try {
+            const { default: handler } = await import('./api/auth.ts')
+            await handler(req, res)
+          } catch (e: any) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: e.message }))
+          }
+          return
+        }
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
+    neonDevServerPlugin(),
     react(),
     tailwindcss(),
     VitePWA({
@@ -51,7 +84,11 @@ export default defineConfig({
         skipWaiting: false,
         runtimeCaching: [
           {
-            // Do NOT cache Supabase API, database queries or auth endpoints
+            // Do NOT cache database queries or auth endpoints
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkOnly',
           },

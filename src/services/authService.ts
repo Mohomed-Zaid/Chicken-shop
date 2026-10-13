@@ -117,5 +117,5 @@ export async function getUserProfile(user?: User | null): Promise<UserProfile | 
 
 export function onAuthStateChange(callback: (session: Session | null) => void) {
   if (!supabase) return { data: { subscription: { unsubscribe: () => undefined } } }
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session))
+  return supabase.auth.onAuthStateChange((_event: any, session: any) => callback(session))
 }

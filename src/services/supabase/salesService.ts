@@ -28,7 +28,7 @@ export const fetchSalesFromSupabase = async (): Promise<Sale[]> => {
       salesData = data
     }
 
-    return salesData.map(row => {
+    return (salesData || []).map(row => {
       const soldAtDate = row.sold_at ? new Date(row.sold_at) : new Date()
       const rawItems = (row.sale_items || []) as Array<{
         id?: string
