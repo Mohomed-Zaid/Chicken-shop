@@ -1,6 +1,12 @@
-import type { IncomingMessage } from 'node:http'
 import crypto from 'node:crypto'
-import { sql } from './_lib/db.ts'
+import { neon } from '@neondatabase/serverless'
+
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.NEON_DATABASE_URL ||
+  'postgresql://neondb_owner:npg_FE8PS6KZLixf@ep-raspy-resonance-b5v6v2fq-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require'
+
+const sql = neon(connectionString)
 
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex')
@@ -31,18 +37,28 @@ function parseToken(token: string): { userId: string; email: string; role: strin
   }
 }
 
-async function readBody(req: IncomingMessage): Promise<any> {
-  return new Promise((resolve, reject) => {
+async function readBody(req: any): Promise<any> {
+  if (req.body && typeof req.body === 'object') {
+    return req.body
+  }
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body)
+    } catch {
+      return {}
+    }
+  }
+  return new Promise((resolve) => {
     let body = ''
-    req.on('data', chunk => (body += chunk))
+    req.on('data', (chunk: any) => (body += chunk))
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {})
-      } catch (e) {
-        reject(e)
+      } catch {
+        resolve({})
       }
     })
-    req.on('error', reject)
+    req.on('error', () => resolve({}))
   })
 }
 

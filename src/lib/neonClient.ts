@@ -89,6 +89,15 @@ class QueryBuilder<T = any> implements PromiseLike<{ data: T[] | T | null; error
   }
 }
 
+async function safeJson(res: Response): Promise<any> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text || `HTTP ${res.status}` }
+  }
+}
+
 export const neonClient = {
   from(table: string) {
     return {
@@ -129,7 +138,10 @@ export const neonClient = {
         },
         body: JSON.stringify({ action: 'rpc', fn, args }),
       })
-      const json = await res.json()
+      const json = await safeJson(res)
+      if (!res.ok || json.error) {
+        return { data: null, error: new Error(json.error?.message || json.error || `RPC ${fn} failed`) }
+      }
       return json
     } catch (err: any) {
       return { data: null, error: err }
@@ -143,7 +155,7 @@ export const neonClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
       })
-      const json = await res.json()
+      const json = await safeJson(res)
       if (!res.ok || json.error) {
         return { data: { user: null, session: null }, error: new Error(json.error || 'Login failed') }
       }
@@ -176,7 +188,7 @@ export const neonClient = {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ action: 'me' }),
         })
-        const json = await res.json()
+        const json = await safeJson(res)
         if (json.user) {
           localStorage.setItem('neon-auth-user', JSON.stringify(json.user))
         }
