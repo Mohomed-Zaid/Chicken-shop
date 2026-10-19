@@ -1,9 +1,11 @@
 import { neon } from '@neondatabase/serverless'
 
-const connectionString =
+let connectionString =
   process.env.DATABASE_URL ||
   process.env.NEON_DATABASE_URL ||
-  'postgresql://neondb_owner:npg_FE8PS6KZLixf@ep-raspy-resonance-b5v6v2fq-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  'postgresql://neondb_owner:npg_FE8PS6KZLixf@ep-raspy-resonance-b5v6v2fq.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require'
+
+connectionString = connectionString.replace('-pooler.c-7.', '.c-7.')
 
 const rawSql = neon(connectionString)
 
@@ -185,7 +187,16 @@ export default async function handler(req: any, res: any) {
       // Insert in small batches
       for (const row of rows) {
         const values = cols.map(c => {
-          const val = row[c]
+          let val = row[c]
+          if (c === 'barcode' && (val === '' || (typeof val === 'string' && val.trim() === ''))) {
+            val = null
+          }
+          if (c === 'updated_at' && !val) {
+            val = new Date().toISOString()
+          }
+          if (c === 'created_at' && !val) {
+            val = new Date().toISOString()
+          }
           if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
             return JSON.stringify(val)
           }
@@ -236,7 +247,10 @@ export default async function handler(req: any, res: any) {
       const setClauses: string[] = []
 
       for (const col of cols) {
-        const val = changes[col]
+        let val = changes[col]
+        if (col === 'barcode' && (val === '' || (typeof val === 'string' && val.trim() === ''))) {
+          val = null
+        }
         values.push(val !== null && typeof val === 'object' && !(val instanceof Date) ? JSON.stringify(val) : val)
         setClauses.push(`"${col}" = $${values.length}`)
       }

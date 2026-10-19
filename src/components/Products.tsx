@@ -12,7 +12,7 @@ export function Products({
   onDelete,
 }: {
   items: GroceryProduct[]
-  onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void
+  onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => Promise<void> | void
   onToggle: (id: string) => void
   onDelete?: (id: string) => void
 }) {
@@ -394,12 +394,13 @@ function Editor({
   item: GroceryProduct
   existing: GroceryProduct[]
   close: () => void
-  save: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void
+  save: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => Promise<void> | void
   onDeleteRequest?: (item: GroceryProduct) => void
   onRestockRequest?: (item: GroceryProduct) => void
 }) {
   const [product, setProduct] = useState(item)
   const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   const [duplicateFound, setDuplicateFound] = useState<GroceryProduct | null>(null)
   const [newRetailQty, setNewRetailQty] = useState('')
   const [newRetailPrice, setNewRetailPrice] = useState('')
@@ -555,7 +556,7 @@ function Editor({
     })
   }
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     const retPrice = Number(product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : product.sellingPrice)
     if (
@@ -649,36 +650,45 @@ function Editor({
       }
     }
 
-    save(
-      {
-        code: codeVal,
-        name: product.name,
-        category: product.category,
-        barcode: product.barcode,
-        costPrice: Number(product.costPrice),
-        sellingPrice: retPrice,
-        retailPrice: retPrice,
-        wholesaleEnabled: Boolean(product.wholesaleEnabled),
-        wholesalePrice: product.wholesaleEnabled && product.wholesalePrice != null ? Number(product.wholesalePrice) : null,
-        wholesaleMinQuantity: product.wholesaleEnabled && product.wholesaleMinQuantity != null ? Math.max(1, Math.floor(Number(product.wholesaleMinQuantity))) : null,
-        discountPrice: discNum,
-        stockQuantity: Number(product.stockQuantity),
-        lowStockLevel: Number(product.lowStockLevel),
-        unit: product.unit,
-        active: product.active,
-        packPricingEnabled: Boolean(product.packPricingEnabled),
-        packPrices: product.packPrices || [],
-        promotionEnabled: Boolean(product.promotionEnabled),
-        promotionType: product.promotionType || 'BUY_X_GET_Y_FREE',
-        promotionBuyQuantity: product.promotionBuyQuantity ? Math.max(1, Math.floor(Number(product.promotionBuyQuantity))) : 2,
-        promotionFreeQuantity: product.promotionFreeQuantity ? Math.max(1, Math.floor(Number(product.promotionFreeQuantity))) : 1,
-        promotionStartDate: product.promotionStartDate ? product.promotionStartDate.trim() : null,
-        promotionEndDate: product.promotionEndDate ? product.promotionEndDate.trim() : null,
-        promotionActive: product.promotionActive ?? true,
-      },
-      product.id || undefined
-    )
-    close()
+    setIsSaving(true)
+    setError('')
+    try {
+      await save(
+        {
+          code: codeVal,
+          name: product.name,
+          category: product.category,
+          barcode: product.barcode && product.barcode.trim() ? product.barcode.trim() : '',
+          costPrice: Number(product.costPrice),
+          sellingPrice: retPrice,
+          retailPrice: retPrice,
+          wholesaleEnabled: Boolean(product.wholesaleEnabled),
+          wholesalePrice: product.wholesaleEnabled && product.wholesalePrice != null ? Number(product.wholesalePrice) : null,
+          wholesaleMinQuantity: product.wholesaleEnabled && product.wholesaleMinQuantity != null ? Math.max(1, Math.floor(Number(product.wholesaleMinQuantity))) : null,
+          discountPrice: discNum,
+          stockQuantity: Number(product.stockQuantity),
+          lowStockLevel: Number(product.lowStockLevel),
+          unit: product.unit,
+          active: product.active,
+          packPricingEnabled: Boolean(product.packPricingEnabled),
+          packPrices: product.packPrices || [],
+          promotionEnabled: Boolean(product.promotionEnabled),
+          promotionType: product.promotionType || 'BUY_X_GET_Y_FREE',
+          promotionBuyQuantity: product.promotionBuyQuantity ? Math.max(1, Math.floor(Number(product.promotionBuyQuantity))) : 2,
+          promotionFreeQuantity: product.promotionFreeQuantity ? Math.max(1, Math.floor(Number(product.promotionFreeQuantity))) : 1,
+          promotionStartDate: product.promotionStartDate ? product.promotionStartDate.trim() : null,
+          promotionEndDate: product.promotionEndDate ? product.promotionEndDate.trim() : null,
+          promotionActive: product.promotionActive ?? true,
+        },
+        product.id || undefined
+      )
+      close()
+    } catch (err: any) {
+      console.error('Failed to save product:', err)
+      setError(err?.message || 'Failed to save product to database. Please check your connection and try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const field = (key: keyof GroceryProduct, label: string, type = 'text') => (
@@ -1394,8 +1404,10 @@ function Editor({
             </button>
           ) : <div />}
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" onClick={close}>Cancel</button>
-            <button className="confirm" type="submit">Save Product</button>
+            <button type="button" onClick={close} disabled={isSaving}>Cancel</button>
+            <button className="confirm" type="submit" disabled={isSaving}>
+              {isSaving ? 'Saving to Database...' : item.id ? 'Save Changes' : 'Create Product'}
+            </button>
           </div>
         </footer>
       </form>
@@ -1410,13 +1422,14 @@ function RestockModal({
 }: {
   product: GroceryProduct
   close: () => void
-  onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void
+  onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => Promise<void> | void
 }) {
   const [addQty, setAddQty] = useState('')
   const [costPrice, setCostPrice] = useState(String(product.costPrice || ''))
   const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleConfirm = (e: React.FormEvent) => {
+  const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault()
     const qtyNum = parseFloat(addQty)
     if (isNaN(qtyNum) || qtyNum <= 0) {
@@ -1427,15 +1440,24 @@ function RestockModal({
     const newStock = Math.round((product.stockQuantity + qtyNum) * 100) / 100
     const newCost = !isNaN(costNum) && costNum >= 0 ? costNum : product.costPrice
 
-    onSave(
-      {
-        ...product,
-        stockQuantity: newStock,
-        costPrice: newCost,
-      },
-      product.id
-    )
-    close()
+    setIsSaving(true)
+    setError('')
+    try {
+      await onSave(
+        {
+          ...product,
+          stockQuantity: newStock,
+          costPrice: newCost,
+        },
+        product.id
+      )
+      close()
+    } catch (err: any) {
+      console.error('Restock save failed:', err)
+      setError(err?.message || 'Failed to update stock in database. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const previewNewTotal =
@@ -1591,13 +1613,14 @@ function RestockModal({
         </div>
 
         <footer>
-          <button type="button" onClick={close}>Cancel</button>
+          <button type="button" onClick={close} disabled={isSaving}>Cancel</button>
           <button
             type="submit"
             className="confirm"
+            disabled={isSaving}
             style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 800 }}
           >
-            ✓ Confirm &amp; Add Stock
+            {isSaving ? 'Updating Database...' : '✓ Confirm & Add Stock'}
           </button>
         </footer>
       </form>

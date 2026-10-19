@@ -301,7 +301,7 @@ export default function App() {
       saveGrocery(
         grocery.map(item => item.id === id ? { ...item, active: !item.active, updatedAt: new Date().toISOString() } : item)
       ),
-    onSave: (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => {
+    onSave: async (product: Omit<GroceryProduct, 'id' | 'createdAt' | 'updatedAt'>, id?: string): Promise<void> => {
       const nextStock = Number(product.stockQuantity)
       let prevStock = 0
       if (id) {
@@ -351,10 +351,12 @@ export default function App() {
       groceryStore.save(nextList)
 
       if (storageAdapter.isSupabase()) {
-        saveSingleProduct(targetProduct, prevStock).catch(err => {
-          console.warn('Individual product sync warning:', err)
-          saveProducts(nextList).catch(console.error)
-        })
+        try {
+          await saveSingleProduct(targetProduct, prevStock)
+        } catch (err) {
+          console.error('Failed to save product to Neon database:', err)
+          throw err
+        }
       }
     },
     onDelete: async (id: string) => {

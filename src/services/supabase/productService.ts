@@ -77,11 +77,12 @@ export const rowToProduct = (row: ProductRow, packPrices: ProductPackPrice[] = [
 
 export const productToRow = (product: GroceryProduct): ProductRow => {
   const retailPrice = product.retailPrice !== undefined && product.retailPrice !== null ? product.retailPrice : product.sellingPrice
+  const barcode = product.barcode && product.barcode.trim() ? product.barcode.trim() : null
   const row: ProductRow = {
     id: product.id,
     name: product.name,
     category: product.category || null,
-    barcode: product.barcode || null,
+    barcode,
     cost_price: product.costPrice,
     selling_price: retailPrice,
     retail_price: retailPrice,
@@ -100,8 +101,8 @@ export const productToRow = (product: GroceryProduct): ProductRow => {
     promotion_start_date: product.promotionStartDate || null,
     promotion_end_date: product.promotionEndDate || null,
     promotion_active: product.promotionActive ?? true,
-    created_at: product.createdAt || undefined,
-    updated_at: product.updatedAt || undefined,
+    created_at: product.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   }
   if (product.code) row.code = product.code
   if (product.discountPrice !== undefined) {
@@ -139,54 +140,10 @@ export const getProducts = async (): Promise<GroceryProduct[]> => {
   return sortGroceryProducts(rows.map(row => rowToProduct(row, packMap.get(row.id) || [])))
 }
 
-export const saveSingleProduct = async (product: GroceryProduct, previousStock?: number): Promise<void> => {
+export const saveSingleProduct = async (product: GroceryProduct, _previousStock?: number): Promise<void> => {
   const row = productToRow(product)
-
-  // 1. Try dedicated save_product_with_stock RPC first if available
-  try {
-    const db = requireSupabase()
-    const { error: rpcErr } = await db.rpc('save_product_with_stock', {
-      product_payload: row,
-    })
-    if (!rpcErr) {
-      await syncProductPackPrices([product])
-      return
-    }
-  } catch {
-    // Proceed to standard upsert fallback
-  }
-
-  // 2. Direct upsert
-  try {
-    await upsertRows('products', [row])
-    await syncProductPackPrices([product])
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    // If blocked by trigger prevent_direct_stock_update
-    if (errMsg.includes('Stock quantity') || errMsg.includes('stock transactions')) {
-      const prev = previousStock !== undefined ? previousStock : 0
-      const delta = product.stockQuantity - prev
-
-      // Upsert product row retaining previous stock
-      const safeRow = { ...row, stock_quantity: prev }
-      await upsertRows('products', [safeRow])
-
-      // Adjust stock via authorized adjust_stock RPC
-      if (delta !== 0) {
-        const db = requireSupabase()
-        await db.rpc('adjust_stock', {
-          p_product_id: product.id,
-          p_delta: delta,
-          p_movement_type: 'adjustment',
-          p_reason: 'Stock update via Product Catalog',
-          p_notes: `Stock changed from ${prev} to ${product.stockQuantity}`,
-        })
-      }
-      await syncProductPackPrices([product])
-    } else {
-      throw err
-    }
-  }
+  await upsertRows('products', [row])
+  await syncProductPackPrices([product])
 }
 
 const syncProductPackPrices = async (products: GroceryProduct[]) => {
