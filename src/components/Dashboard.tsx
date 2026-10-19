@@ -5,6 +5,7 @@ import { storageAdapter } from '../services/storageAdapter'
 import { fetchSalesFromSupabase } from '../services/supabase/salesService'
 import { LiveDateTime } from './dashboard/LiveDateTime'
 import { SalesChart } from './dashboard/SalesChart'
+import { useSubscription } from '../context/SubscriptionContext'
 
 type Props = { onInventory?: () => void; isAdmin?: boolean }
 
@@ -19,6 +20,7 @@ const Card = ({ label, value, detail, onClick }: { label: string; value: string;
 )
 
 export function Dashboard({ onInventory, isAdmin = true }: Props) {
+  const { daysRemaining, expiryDate } = useSubscription()
   const [filter, setFilter] = useState('Today')
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,7 +106,33 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
           <h1>Dashboard</h1>
           <p>{snapshot.range.start} to {snapshot.range.end}</p>
         </div>
-        <div className="dashboard-toolbar">
+        <div className="dashboard-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '9999px',
+              background: daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+              border: `1px solid ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+              color: daysRemaining <= 5 ? '#fca5a5' : '#a7f3d0',
+              fontSize: '12px',
+              fontWeight: 700,
+            }}
+            title={expiryDate ? `Active until ${new Date(expiryDate).toLocaleDateString()}` : undefined}
+          >
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: daysRemaining <= 5 ? '#ef4444' : '#10b981',
+                boxShadow: `0 0 6px ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+              }}
+            />
+            <span>Subscription: <strong>{daysRemaining} {daysRemaining === 1 ? 'Day' : 'Days'} Left</strong></span>
+          </div>
           <select value={filter} onChange={event => setFilter(event.target.value)}>
             {filters.map(item => <option key={item}>{item}</option>)}
           </select>
@@ -121,6 +149,11 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
       </div>
 
       <div className="bi-grid">
+        <Card
+          label="SUBSCRIPTION STATUS"
+          value={`${daysRemaining} Days`}
+          detail={expiryDate ? `Active until ${new Date(expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Active'}
+        />
         <Card
           label={filter === 'Today' ? "TODAY'S SALES" : 'SALES FOR SELECTED PERIOD'}
           value={formatMoney(snapshot.salesTotal)}

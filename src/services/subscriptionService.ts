@@ -101,42 +101,55 @@ export async function getCurrentSubscription(businessId: string = DEFAULT_BUSINE
       p_business_id: businessId,
     })
 
-    if (error) {
-      console.error('Subscription verification RPC failed:', error)
-      // If server cannot be reached or RPC fails, DO NOT assume active
-      return {
-        id: '',
-        business_id: businessId,
-        business_name: 'Unknown Store',
-        plan: '30_days',
-        start_date: '',
-        expiry_date: '',
-        stored_status: 'unknown',
-        effective_status: 'unverified',
-        is_active: false,
-        server_time: '',
-        days_remaining: 0,
-        seconds_remaining: 0,
-      }
+    if (!error && data && data.is_active) {
+      try {
+        localStorage.setItem('cached_subscription', JSON.stringify(data))
+      } catch {}
+      return data as SubscriptionData
     }
 
-    return data as SubscriptionData
-  } catch (err) {
-    console.error('Network or communication error during subscription check:', err)
-    return {
-      id: '',
-      business_id: businessId,
-      business_name: 'Unknown Store',
-      plan: '30_days',
-      start_date: '',
-      expiry_date: '',
-      stored_status: 'unknown',
-      effective_status: 'unverified',
-      is_active: false,
-      server_time: '',
-      days_remaining: 0,
-      seconds_remaining: 0,
+    if (error) {
+      console.warn('Subscription verification RPC failed, checking cached status:', error)
     }
+  } catch (err) {
+    console.warn('Network or communication error during subscription check, checking cached status:', err)
+  }
+
+  // Graceful offline fallback: if previously verified active and still within the expiry period
+  try {
+    const rawCached = localStorage.getItem('cached_subscription')
+    if (rawCached) {
+      const cached = JSON.parse(rawCached)
+      if (cached && cached.expiry_date && cached.stored_status === 'active') {
+        const now = new Date()
+        const expiry = new Date(cached.expiry_date)
+        if (expiry.getTime() > now.getTime()) {
+          const days_remaining = Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (86400 * 1000)))
+          return {
+            ...cached,
+            days_remaining,
+            is_active: true,
+            effective_status: 'active',
+          } as SubscriptionData
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback only if no valid active subscription exists
+  return {
+    id: '',
+    business_id: businessId,
+    business_name: 'Unknown Store',
+    plan: '30_days',
+    start_date: '',
+    expiry_date: '',
+    stored_status: 'unknown',
+    effective_status: 'unverified',
+    is_active: false,
+    server_time: '',
+    days_remaining: 0,
+    seconds_remaining: 0,
   }
 }
 

@@ -6,7 +6,38 @@ const connectionString =
   process.env.NEON_DATABASE_URL ||
   'postgresql://neondb_owner:npg_FE8PS6KZLixf@ep-raspy-resonance-b5v6v2fq-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require'
 
-const sql = neon(connectionString)
+const rawSql = neon(connectionString)
+
+async function queryWithRetry(queryText: string, params: any[] = [], maxRetries = 2): Promise<any[]> {
+  let lastError: any = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await rawSql.query(queryText, params)
+    } catch (err: any) {
+      lastError = err
+      const msg = err?.message || String(err)
+      console.warn(`Auth query attempt ${attempt + 1} failed: ${msg}`)
+      if (
+        attempt < maxRetries &&
+        (msg.includes('fetch failed') ||
+          msg.includes('network') ||
+          msg.includes('timeout') ||
+          msg.includes('connection') ||
+          msg.includes('socket') ||
+          msg.includes('ECONNRESET'))
+      ) {
+        await new Promise(r => setTimeout(r, 700 * (attempt + 1)))
+      } else {
+        break
+      }
+    }
+  }
+  throw lastError
+}
+
+const sql = {
+  query: queryWithRetry,
+}
 
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex')

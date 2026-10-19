@@ -35,8 +35,26 @@ interface SubscriptionContextValue {
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(null)
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(() => {
+    try {
+      const raw = localStorage.getItem('cached_subscription')
+      if (raw) {
+        const c = JSON.parse(raw)
+        const now = new Date()
+        const expiry = new Date(c.expiry_date)
+        if (expiry.getTime() > now.getTime() && c.stored_status === 'active') {
+          return {
+            ...c,
+            days_remaining: Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (86400 * 1000))),
+            is_active: true,
+            effective_status: 'active' as const,
+          }
+        }
+      }
+    } catch {}
+    return null
+  })
+  const [loading, setLoading] = useState(() => !localStorage.getItem('cached_subscription'))
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<SubscriptionHistoryEntry[]>([])
 
