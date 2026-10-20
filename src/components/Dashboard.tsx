@@ -6,6 +6,7 @@ import { fetchSalesFromSupabase } from '../services/supabase/salesService'
 import { LiveDateTime } from './dashboard/LiveDateTime'
 import { SalesChart } from './dashboard/SalesChart'
 import { useSubscription } from '../context/SubscriptionContext'
+import { useAuth } from '../context/AuthContext'
 
 type Props = { onInventory?: () => void; isAdmin?: boolean }
 
@@ -21,6 +22,8 @@ const Card = ({ label, value, detail, onClick }: { label: string; value: string;
 
 export function Dashboard({ onInventory, isAdmin = true }: Props) {
   const { daysRemaining, expiryDate } = useSubscription()
+  const { profile } = useAuth()
+  const isSuperAdmin = profile?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
   const [filter, setFilter] = useState('Today')
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -107,32 +110,34 @@ export function Dashboard({ onInventory, isAdmin = true }: Props) {
           <p>{snapshot.range.start} to {snapshot.range.end}</p>
         </div>
         <div className="dashboard-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '9999px',
-              background: daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)',
-              border: `1px solid ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
-              color: daysRemaining <= 5 ? '#fca5a5' : '#a7f3d0',
-              fontSize: '12px',
-              fontWeight: 700,
-            }}
-            title={expiryDate ? `Active until ${new Date(expiryDate).toLocaleDateString()}` : undefined}
-          >
-            <span
+          {isSuperAdmin && (
+            <div
               style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: daysRemaining <= 5 ? '#ef4444' : '#10b981',
-                boxShadow: `0 0 6px ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '9999px',
+                background: daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+                border: `1px solid ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+                color: daysRemaining <= 5 ? '#fca5a5' : '#a7f3d0',
+                fontSize: '12px',
+                fontWeight: 700,
               }}
-            />
-            <span>Subscription: <strong>{daysRemaining} {daysRemaining === 1 ? 'Day' : 'Days'} Left</strong></span>
-          </div>
+              title={expiryDate ? `Active until ${new Date(expiryDate).toLocaleDateString()}` : undefined}
+            >
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: daysRemaining <= 5 ? '#ef4444' : '#10b981',
+                  boxShadow: `0 0 6px ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+                }}
+              />
+              <span>Subscription: <strong>{daysRemaining} {daysRemaining === 1 ? 'Day' : 'Days'} Left</strong></span>
+            </div>
+          )}
           <select value={filter} onChange={event => setFilter(event.target.value)}>
             {filters.map(item => <option key={item}>{item}</option>)}
           </select>

@@ -189,7 +189,7 @@ function PosLiveHeader() {
   const [now, setNow] = useState<Date>(() => new Date())
   const { profile } = useAuth()
   const { status, daysRemaining, isActive } = useSubscription()
-
+  const isSuperAdmin = profile?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000)
@@ -227,34 +227,36 @@ function PosLiveHeader() {
           <span className="cashier-label">Cashier:</span>
           <strong>{profile?.full_name || 'Cashier'}</strong>
         </div>
-        <div
-          className={`pos-status-indicator ${isActive ? 'active' : status}`}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '9999px',
-            background: daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-            border: `1px solid ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
-            color: daysRemaining <= 5 ? '#fca5a5' : '#6ee7b7',
-            fontSize: '12px',
-            fontWeight: 700,
-          }}
-          title={`Subscription status: ${status}. ${daysRemaining} days remaining.`}
-        >
-          <span
-            className="status-dot"
+        {isSuperAdmin && (
+          <div
+            className={`pos-status-indicator ${isActive ? 'active' : status}`}
             style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: daysRemaining <= 5 ? '#ef4444' : '#10b981',
-              boxShadow: `0 0 6px ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '9999px',
+              background: daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              border: `1px solid ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+              color: daysRemaining <= 5 ? '#fca5a5' : '#6ee7b7',
+              fontSize: '12px',
+              fontWeight: 700,
             }}
-          />
-          <span>{daysRemaining} {daysRemaining === 1 ? 'Day' : 'Days'} Left</span>
-        </div>
+            title={`Subscription status: ${status}. ${daysRemaining} days remaining.`}
+          >
+            <span
+              className="status-dot"
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: daysRemaining <= 5 ? '#ef4444' : '#10b981',
+                boxShadow: `0 0 6px ${daysRemaining <= 5 ? '#ef4444' : '#10b981'}`,
+              }}
+            />
+            <span>{daysRemaining} {daysRemaining === 1 ? 'Day' : 'Days'} Left</span>
+          </div>
+        )}
       </div>
     </header>
   )

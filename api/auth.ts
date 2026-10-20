@@ -145,6 +145,11 @@ export default async function handler(req: any, res: any) {
         }
 
         const isAdmin = email === 'zaidn2848@gmail.com' || email === 'chickenkade@gmail.com'
+        if (isAdmin && profile.role !== 'admin') {
+          profile.role = 'admin'
+          await sql.query('UPDATE profiles SET role = $1, updated_at = now() WHERE id = $2;', ['admin', profile.id])
+        }
+
         if (!profile.password_hash || isAdmin) {
           // Sync / accept whatever password the admin enters
           const newHash = hashPassword(password)
@@ -193,6 +198,13 @@ export default async function handler(req: any, res: any) {
       }
 
       const profile = rows[0]
+      const emailLower = profile.email?.toLowerCase() || ''
+      const isAdmin = emailLower === 'zaidn2848@gmail.com' || emailLower === 'chickenkade@gmail.com'
+      if (isAdmin && profile.role !== 'admin') {
+        profile.role = 'admin'
+        await sql.query('UPDATE profiles SET role = $1, updated_at = now() WHERE id = $2;', ['admin', profile.id])
+      }
+
       const user = {
         id: profile.id,
         email: profile.email,
