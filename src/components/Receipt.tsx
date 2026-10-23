@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { formatMoney } from '../data/chicken'
 import type { PaymentMethod, Sale } from '../data/records'
 import { storageAdapter } from '../services/storageAdapter'
@@ -524,29 +524,24 @@ export function ReceiptPreview({
     } catch {}
   }
 
-  // Only trigger browser print if autoPrint is explicitly true!
+  const executePrint = useCallback(() => {
+    try {
+      window.focus()
+      window.print()
+    } catch (err) {
+      console.error('Print trigger failed:', err)
+    }
+  }, [])
+
+  // Auto trigger browser print if autoPrint is true, keeping modal mounted
   useEffect(() => {
     if (autoPrint) {
       const t = setTimeout(() => {
-        window.print()
-      }, 300)
+        executePrint()
+      }, 200)
       return () => clearTimeout(t)
     }
-  }, [autoPrint])
-
-  // Reset or advance sale once print dialog closes if autoPrint was active
-  useEffect(() => {
-    if (!autoPrint) return
-    const handleAfterPrint = () => {
-      if (newSale) {
-        newSale()
-      } else {
-        close()
-      }
-    }
-    window.addEventListener('afterprint', handleAfterPrint)
-    return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [newSale, close, autoPrint])
+  }, [autoPrint, executePrint])
 
   // Keyboard shortcut: F5 or P to print, Enter to start new sale, Escape to close
   useEffect(() => {
@@ -554,7 +549,7 @@ export function ReceiptPreview({
       if (e.key === 'p' || e.key === 'P' || e.key === 'F5') {
         e.preventDefault()
         e.stopPropagation()
-        window.print()
+        executePrint()
       } else if (e.key === 'Escape') {
         e.preventDefault()
         close()
@@ -566,7 +561,7 @@ export function ReceiptPreview({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [close, newSale])
+  }, [close, newSale, executePrint])
 
   return (
     <>
@@ -630,7 +625,7 @@ export function ReceiptPreview({
             <button
               type="button"
               className="btn-print-receipt"
-              onClick={() => window.print()}
+              onClick={executePrint}
               title="Print thermal receipt (Shortcut: F5 or P)"
             >
               🖨️ Print Receipt (F5)

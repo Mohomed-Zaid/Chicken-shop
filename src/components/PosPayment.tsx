@@ -274,7 +274,7 @@ function PaymentModal({
   selectedCustomer: Customer | null
   onSelectCustomer: (c: Customer | null) => void
   onCancel: () => void
-  onComplete: (method: PaymentMethod, received: number, customer?: Customer | null) => void
+  onComplete: (method: PaymentMethod, received: number, customer?: Customer | null, shouldAutoPrint?: boolean) => void
   sellingMode?: SellingMode
 }) {
   const [method, setMethod] = useState<PaymentMethod>('Cash')
@@ -341,7 +341,7 @@ function PaymentModal({
       }
       setProcessing(true)
       setError('')
-      onComplete('Cash', received, selectedCustomer)
+      onComplete('Cash', received, selectedCustomer, true)
       return
     }
 
@@ -352,13 +352,13 @@ function PaymentModal({
       }
       setProcessing(true)
       setError('')
-      onComplete('Credit', 0, selectedCustomer)
+      onComplete('Credit', 0, selectedCustomer, true)
       return
     }
 
     setProcessing(true)
     setError('')
-    onComplete(method, total, selectedCustomer)
+    onComplete(method, total, selectedCustomer, true)
   }
 
   // Keyboard shortcuts inside Payment Modal (Escape to cancel, O or Alt+O for Other, C for Cash, etc.)
@@ -2206,7 +2206,8 @@ export function PosPayment({
   const completeSale = async (
     paymentMethod: PaymentMethod,
     amountReceived: number,
-    customer?: Customer | null
+    customer?: Customer | null,
+    shouldAutoPrint = true
   ) => {
     try {
       const groceryCart = cart.filter((item): item is GroceryCartItem => item.kind === 'grocery')
@@ -2377,6 +2378,7 @@ export function PosPayment({
       setCart([])
       setPayment(false)
       setSelectedCustomer(null)
+      setAutoPrintAfterSale(shouldAutoPrint)
       setCompleted(sale)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Sale could not be completed. No changes were made.')
