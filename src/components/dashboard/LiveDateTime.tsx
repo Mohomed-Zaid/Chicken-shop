@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useSubscription } from '../../context/SubscriptionContext'
-import { useAuth } from '../../context/AuthContext'
 
 export function LiveDateTime() {
   const [now, setNow] = useState<Date>(() => new Date())
   const { status, daysRemaining, isActive } = useSubscription()
-  const { profile } = useAuth()
-
-  const isSuperAdmin = profile?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -64,19 +60,17 @@ export function LiveDateTime() {
           <span className="time-digits">{formattedTime}</span>
         </div>
 
-        {/* Subscription Status Tag - Visible ONLY for zaidn2848@gmail.com */}
-        {isSuperAdmin && (
-          <div className="clock-license-pill">
-            <span className={`pill-badge ${status}`}>
-              {isActive ? 'ACTIVE LICENSE' : status.toUpperCase()}
-            </span>
-            <span className="pill-subtext">
-              {status === 'expired'
-                ? 'Expired'
-                : `${daysRemaining} ${daysRemaining === 1 ? 'Day' : 'Days'} Remaining`}
-            </span>
-          </div>
-        )}
+        {/* Subscription Status Tag */}
+        <div className="clock-license-pill">
+          <span className={`pill-badge ${status}`}>
+            {isActive ? 'ACTIVE LICENSE' : status.toUpperCase()}
+          </span>
+          <span className="pill-subtext">
+            {status === 'expired'
+              ? 'Expired'
+              : `${daysRemaining} ${daysRemaining === 1 ? 'Day' : 'Days'} Remaining`}
+          </span>
+        </div>
       </div>
     </div>
   )
