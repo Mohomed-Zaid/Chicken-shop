@@ -580,6 +580,90 @@ export function ReceiptPreview({
   }
 
   const executePrint = useCallback(() => {
+    // 1. Try dedicated isolated iframe printing (ensures only receipt is sent, no parent web UI interference)
+    const printArea = document.getElementById('receipt-printable-area') || document.getElementById('receipt-preview-area')
+    if (printArea) {
+      try {
+        let iframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement | null
+        if (!iframe) {
+          iframe = document.createElement('iframe')
+          iframe.id = 'receipt-print-iframe'
+          iframe.style.position = 'fixed'
+          iframe.style.right = '0'
+          iframe.style.bottom = '0'
+          iframe.style.width = '0'
+          iframe.style.height = '0'
+          iframe.style.border = '0'
+          iframe.style.opacity = '0'
+          iframe.style.pointerEvents = 'none'
+          document.body.appendChild(iframe)
+        }
+
+        const doc = iframe.contentWindow?.document
+        if (doc) {
+          doc.open()
+          doc.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8" />
+                <title>Receipt</title>
+                <style>
+                  @page { size: auto; margin: 0; }
+                  * { box-sizing: border-box; margin: 0; padding: 0; color: #000000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                  body { margin: 0 auto; padding: 2mm 3mm; width: 100%; max-width: 80mm; font-family: 'Noto Sans Sinhala', 'Iskoola Pota', 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; }
+                  .thermal-divider-dashed { border: none; border-top: 1px dashed #444444; margin: 6px 0; width: 100%; display: block; }
+                  .thermal-business-name { font-size: 16px; font-weight: 600; text-align: center; text-transform: uppercase; margin-bottom: 2px; }
+                  .thermal-business-info { font-size: 11px; font-weight: 400; text-align: center; line-height: 1.25; }
+                  .thermal-meta-grid { font-size: 12px; font-weight: 400; display: flex; flex-direction: column; gap: 2px; }
+                  .thermal-meta-row { display: flex; justify-content: space-between; align-items: baseline; }
+                  .thermal-meta-row.invoice-row .meta-label { font-weight: 600; font-size: 12px; }
+                  .thermal-meta-row.invoice-row .meta-value.bold-invoice { font-size: 15px; font-weight: 600; }
+                  .thermal-customer-box { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+                  .thermal-customer-title { font-size: 12px; font-weight: 600; text-transform: uppercase; }
+                  .thermal-items-header { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; text-transform: uppercase; border-top: 1px dashed #444444; border-bottom: 1px dashed #444444; padding: 3px 0; margin: 3px 0 4px; }
+                  .thermal-items-list { display: flex; flex-direction: column; gap: 4px; }
+                  .thermal-item-row { display: flex; flex-direction: column; gap: 1px; }
+                  .thermal-item-row .item-name-line { font-size: 13px; font-weight: 400; line-height: 1.25; }
+                  .thermal-item-row .item-sub-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+                  .thermal-item-row .item-rate { font-size: 12px; font-weight: 400; }
+                  .thermal-item-row .item-total { font-size: 13px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+                  .thermal-summary-block { display: flex; flex-direction: column; gap: 2.5px; font-size: 12px; font-weight: 400; }
+                  .thermal-summary-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 400; }
+                  .thermal-grand-total { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; font-size: 13px; margin: 1px 0; padding: 1px 0; }
+                  .grand-total-label { font-size: 13px; font-weight: 600; }
+                  .grand-total-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+                  .thermal-credit-details { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+                  .thermal-credit-title { font-size: 13px; font-weight: 600; text-transform: uppercase; }
+                  .thermal-previous-due-block { text-align: center; margin: 4px 0 2px; font-size: 12px; line-height: 1.3; }
+                  .thermal-footer { text-align: center; font-size: 11px; font-weight: 400; margin-top: 4px; line-height: 1.3; }
+                  .receipt-cut-space { height: 12mm; }
+                </style>
+              </head>
+              <body>
+                ${printArea.innerHTML}
+              </body>
+            </html>
+          `)
+          doc.close()
+
+          setTimeout(() => {
+            try {
+              iframe?.contentWindow?.focus()
+              iframe?.contentWindow?.print()
+            } catch {
+              window.focus()
+              window.print()
+            }
+          }, 150)
+          return
+        }
+      } catch (e) {
+        console.warn('Iframe print failed, falling back to window.print:', e)
+      }
+    }
+
+    // 2. Fallback directly to window.print()
     try {
       window.focus()
       window.print()
@@ -670,7 +754,7 @@ export function ReceiptPreview({
 
           {/* RECEIPT PAPER PREVIEW CONTAINER */}
           <div className="receipt-preview-scroll">
-            <div className="receipt-paper-roll">
+            <div className="receipt-paper-roll" id="receipt-preview-area">
               <Receipt sale={sale} language={lang} />
             </div>
           </div>
@@ -710,7 +794,7 @@ export function ReceiptPreview({
       </div>
 
       {/* DEDICATED CLEAN PRINT CONTAINER (PRINTS ONLY ON WHITE THERMAL PAPER WITH ZERO BORDERS) */}
-      <div className="thermal-print-only">
+      <div className="thermal-print-only" id="receipt-printable-area">
         <Receipt sale={sale} language={lang} />
       </div>
     </>

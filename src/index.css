@@ -7470,7 +7470,7 @@ button {
    AUTHORITATIVE THERMAL RECEIPT PRINT STYLESHEET (80MM XPRINTER OPTIMIZED)
    ========================================================================== */
 @page {
-  size: 80mm auto;
+  size: auto;
   margin: 0;
 }
 
