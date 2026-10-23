@@ -3,6 +3,7 @@ import { formatMoney } from '../data/chicken'
 import type { PaymentMethod, Sale } from '../data/records'
 import { storageAdapter } from '../services/storageAdapter'
 import { getBusinessSettings, type BusinessSettingsRow } from '../services/supabase/settingsService'
+import { customerStore } from '../data/customers'
 
 export type ReceiptSettings = {
   businessName: string
@@ -90,100 +91,100 @@ export type ReceiptLanguage = 'en' | 'si' | 'bilingual'
 export function getReceiptStrings(lang: ReceiptLanguage = 'si') {
   if (lang === 'si') {
     return {
-      phonePrefix: 'දුරකථන: ',
-      invoiceNo: 'බිල්පත් අංකය:',
-      date: 'දිනය:',
-      sellingMode: 'විකුණුම් මාදිලිය:',
+      phonePrefix: '',
+      invoiceNo: 'BILL NO :',
+      date: 'DateTime :',
+      sellingMode: 'විකුණුම් මාදිලිය :',
       wholesale: 'තොග විකිණුම් (WHOLESALE)',
       wholesaleTag: 'තොග මිල (WHOLESALE)',
       packTag: 'පැකේජ් මිල (PACK)',
       packApplied: 'පැකේජ් මිල යොදන ලදී (Pack Pricing)',
-      cashier: 'අයකැමි:',
-      customer: 'පාරිභෝගිකයා:',
-      item: 'අයිතමය',
+      cashier: 'Cashier :',
+      customer: 'Name :',
+      item: 'DESCRIPTION',
       qtyPrice: 'ප්‍රමාණය × මිල',
-      total: 'එකතුව',
-      free: 'නොමිලේ',
-      totalQty: 'මුළු ප්‍රමාණය:',
-      subtotal: 'උප එකතුව:',
-      discount: 'වට්ටම:',
-      tax: 'බදු:',
-      grandTotal: 'මුළු මුදල',
-      paymentMethod: 'ගෙවීම් ක්‍රමය:',
-      paymentCash: 'මුදල්',
-      paymentCard: 'කාඩ්පත්',
-      paymentCredit: 'ණය',
-      paymentOther: 'වෙනත්',
-      amountReceived: 'ලැබුණු මුදල:',
-      change: 'ඉතිරි මුදල:',
-      defaultFooterLine1: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
-      defaultFooterLine2: 'නැවත පැමිණෙන්න.',
+      total: 'TOTAL',
+      free: 'FREE',
+      totalQty: 'Items Qty :',
+      subtotal: 'SubTotal :',
+      discount: 'Discount :',
+      tax: 'Tax :',
+      grandTotal: 'Grand Total :',
+      paymentMethod: 'Payment :',
+      paymentCash: 'CASH :',
+      paymentCard: 'CARD :',
+      paymentCredit: 'CREDIT :',
+      paymentOther: 'OTHER :',
+      amountReceived: 'Received :',
+      change: 'Change :',
+      defaultFooterLine1: 'Thank you. Please Visit Again.',
+      defaultFooterLine2: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
     }
   }
 
   if (lang === 'bilingual') {
     return {
-      phonePrefix: 'Tel / දුරකථන: ',
-      invoiceNo: 'Invoice # / බිල්පත් අංකය:',
-      date: 'Date / දිනය:',
-      sellingMode: 'Mode / මාදිලිය:',
+      phonePrefix: '',
+      invoiceNo: 'BILL NO / බිල්පත් :',
+      date: 'DateTime / දිනය :',
+      sellingMode: 'Mode / මාදිලිය :',
       wholesale: 'WHOLESALE (තොග)',
       wholesaleTag: 'WHOLESALE (තොග)',
       packTag: 'PACK (පැකේජ්)',
       packApplied: 'Pack Pricing (පැකේජ් මිල)',
-      cashier: 'Cashier / අයකැමි:',
-      customer: 'Customer / පාරිභෝගික:',
-      item: 'Item / අයිතමය',
+      cashier: 'Cashier / අයකැමි :',
+      customer: 'Name / නම :',
+      item: 'DESCRIPTION',
       qtyPrice: 'Qty × Rate',
-      total: 'Total / එකතුව',
+      total: 'TOTAL',
       free: 'FREE / නොමිලේ',
-      totalQty: 'Total Qty / මුළු ප්‍රමාණය:',
-      subtotal: 'Subtotal / උප එකතුව:',
-      discount: 'Discount / වට්ටම:',
-      tax: 'Tax / බදු:',
-      grandTotal: 'TOTAL / මුළු මුදල',
-      paymentMethod: 'Payment / ගෙවීම්:',
-      paymentCash: 'Cash (මුදල්)',
-      paymentCard: 'Card (කාඩ්පත්)',
-      paymentCredit: 'Credit (ණය)',
-      paymentOther: 'Other (වෙනත්)',
-      amountReceived: 'Received / ලැබුණු මුදල:',
-      change: 'Change / ඉතිරි මුදල:',
-      defaultFooterLine1: 'Thank you for shopping with us! · ස්තූතියි!',
-      defaultFooterLine2: 'Please come again · නැවත පැමිණෙන්න.',
+      totalQty: 'Items Qty :',
+      subtotal: 'SubTotal :',
+      discount: 'Discount :',
+      tax: 'Tax :',
+      grandTotal: 'Grand Total :',
+      paymentMethod: 'Payment :',
+      paymentCash: 'CASH :',
+      paymentCard: 'CARD :',
+      paymentCredit: 'CREDIT :',
+      paymentOther: 'OTHER :',
+      amountReceived: 'Received :',
+      change: 'Change :',
+      defaultFooterLine1: 'Thank you. Please Visit Again.',
+      defaultFooterLine2: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
     }
   }
 
   // Default: English (Clean, universal POS receipt standard)
   return {
-    phonePrefix: 'Tel: ',
-    invoiceNo: 'Invoice #:',
-    date: 'Date:',
-    sellingMode: 'Selling Mode:',
+    phonePrefix: '',
+    invoiceNo: 'BILL NO :',
+    date: 'DateTime :',
+    sellingMode: 'Selling Mode :',
     wholesale: 'WHOLESALE',
     wholesaleTag: 'WHOLESALE',
     packTag: 'PACK PRICE',
     packApplied: 'Pack Pricing Applied',
-    cashier: 'Cashier:',
-    customer: 'Customer:',
-    item: 'Item',
+    cashier: 'Cashier :',
+    customer: 'Name :',
+    item: 'DESCRIPTION',
     qtyPrice: 'Qty × Rate',
-    total: 'Total',
+    total: 'TOTAL',
     free: 'FREE',
-    totalQty: 'Total Qty:',
-    subtotal: 'Subtotal:',
-    discount: 'Discount:',
-    tax: 'Tax:',
-    grandTotal: 'TOTAL AMOUNT',
-    paymentMethod: 'Payment Method:',
-    paymentCash: 'Cash',
-    paymentCard: 'Card',
-    paymentCredit: 'Credit',
-    paymentOther: 'Other',
-    amountReceived: 'Cash Tendered:',
-    change: 'Change Due:',
-    defaultFooterLine1: 'Thank you for shopping with us!',
-    defaultFooterLine2: 'Please come again.',
+    totalQty: 'Items Qty :',
+    subtotal: 'SubTotal :',
+    discount: 'Discount :',
+    tax: 'Tax :',
+    grandTotal: 'Grand Total :',
+    paymentMethod: 'Payment :',
+    paymentCash: 'CASH :',
+    paymentCard: 'CARD :',
+    paymentCredit: 'CREDIT :',
+    paymentOther: 'OTHER :',
+    amountReceived: 'Received :',
+    change: 'Change :',
+    defaultFooterLine1: 'Thank you. Please Visit Again.',
+    defaultFooterLine2: '',
   }
 }
 
@@ -204,15 +205,11 @@ const displayDate = (value: string) => {
   if (!value) return ''
   const clean = value.split('T')[0]
   const parts = clean.split('-')
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : clean
+  return parts.length === 3 ? `${parts[0]}/${parts[1]}/${parts[2]}` : clean
 }
 
 const weightLabel = (grams: number) => {
-  if (grams >= 1000) {
-    const kg = grams / 1000
-    return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(3)}kg`
-  }
-  return `${grams}g`
+  return (grams / 1000).toFixed(3)
 }
 
 // Code 39 Barcode Patterns (retained for backward compatibility with Purchases)
@@ -315,6 +312,18 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
   const hasDiscount = sale.discount > 0
   const hasTax = sale.tax > 0
 
+  // Lookup customer details (e.g. phone) if customer attached
+  const customerObj = sale.customerId ? customerStore.getCustomerById(sale.customerId) : null
+  const customerPhone = customerObj?.phone || ''
+
+  // Total items quantity count
+  const totalItemQty = sale.items.reduce((acc, item) => {
+    if (item.productType === 'chicken') {
+      return acc + 1
+    }
+    return acc + (item.paidQuantity ?? item.quantity ?? 1)
+  }, 0)
+
   return (
     <div className="receipt-80mm-container">
       <section className="receipt thermal-80mm">
@@ -329,17 +338,19 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
             />
           )}
           <h1 className="thermal-business-name">{bSettings.businessName}</h1>
-          <p className="thermal-business-info">
-            {bSettings.address && <span>{bSettings.address}</span>}
-            {bSettings.phone && <span>{t.phonePrefix}<strong>{bSettings.phone}</strong></span>}
-          </p>
+          <div className="thermal-business-info">
+            {bSettings.address && <div>{bSettings.address}</div>}
+            {bSettings.phone && <div>{bSettings.phone}</div>}
+          </div>
         </header>
 
+        <div className="thermal-divider-dashed" />
+
         {/* 2. INVOICE META */}
-        <div className="thermal-meta-grid" style={{ marginTop: '6px' }}>
+        <div className="thermal-meta-grid">
           <div className="thermal-meta-row invoice-row">
             <span className="meta-label">{t.invoiceNo}</span>
-            <span className="meta-value bold-invoice">#{sale.invoiceNumber}</span>
+            <span className="meta-value bold-invoice">{sale.invoiceNumber}</span>
           </div>
           <div className="thermal-meta-row">
             <span className="meta-label">{t.date}</span>
@@ -358,18 +369,30 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
             </div>
           )}
           {bSettings.showCustomer && sale.customerName && sale.customerName !== 'Walk-in Customer' && (
-            <div className="thermal-meta-row">
-              <span className="meta-label">{t.customer}</span>
-              <span className="meta-value">{sale.customerName}</span>
+            <div className="thermal-customer-box">
+              <div className="thermal-customer-title">
+                {activeLang === 'si' ? 'CUSTOMER INFORMATION / පාරිභෝගික තොරතුරු' : 'CUSTOMER INFORMATION'}
+              </div>
+              <div className="thermal-meta-row">
+                <span className="meta-label">{t.customer}</span>
+                <span className="meta-value">{sale.customerName}</span>
+              </div>
+              {customerPhone && (
+                <div className="thermal-meta-row">
+                  <span className="meta-label">Phone :</span>
+                  <span className="meta-value">{customerPhone}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
+        <div className="thermal-divider-dashed" />
+
         {/* 3. ITEMS TABLE */}
-        <div className="thermal-items-container" style={{ marginTop: '8px' }}>
+        <div className="thermal-items-container">
           <div className="thermal-items-header">
             <span className="col-desc">{t.item}</span>
-            <span className="col-calc">{t.qtyPrice}</span>
             <span className="col-total">{t.total}</span>
           </div>
 
@@ -378,8 +401,8 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
               const displayName = (item.productName || '').replace(/^\d+\s*-\s*/, '').trim() || item.productName
               const calcText =
                 item.productType === 'chicken'
-                  ? `${weightLabel(item.weightGrams || 0)} × ${formatMoney(item.pricePerKg || 0)}`
-                  : `${item.paidQuantity ?? item.quantity} × ${formatMoney(item.unitPrice)}`
+                  ? `${weightLabel(item.weightGrams || 0)} x (${formatMoney(item.pricePerKg || 0)})`
+                  : `${item.paidQuantity ?? item.quantity} x (${formatMoney(item.unitPrice)})`
 
               const hasFree = Boolean(item.freeQuantity && item.freeQuantity > 0)
 
@@ -392,7 +415,7 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
                     <span className="item-rate">
                       {calcText}
                       {hasFree && (
-                        <span style={{ marginLeft: '6px', fontWeight: 700 }}>
+                        <span style={{ marginLeft: '4px', fontWeight: 600 }}>
                           (+{item.freeQuantity} {t.free})
                         </span>
                       )}
@@ -405,19 +428,19 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
           </div>
         </div>
 
+        <div className="thermal-divider-dashed" />
+
         {/* 4. FINANCIAL SUMMARY */}
-        <div className="thermal-summary-block" style={{ marginTop: '8px' }}>
+        <div className="thermal-summary-block">
+          <div className="thermal-summary-row">
+            <span>{t.subtotal}</span>
+            <span>{formatMoney(sale.subtotal)}</span>
+          </div>
           {hasDiscount && (
-            <>
-              <div className="thermal-summary-row">
-                <span>{t.subtotal}</span>
-                <span>{formatMoney(sale.subtotal)}</span>
-              </div>
-              <div className="thermal-summary-row discount-row">
-                <span>{t.discount}</span>
-                <span>-{formatMoney(sale.discount)}</span>
-              </div>
-            </>
+            <div className="thermal-summary-row discount-row">
+              <span>{t.discount}</span>
+              <span>-{formatMoney(sale.discount)}</span>
+            </div>
           )}
 
           {hasTax && (
@@ -429,42 +452,58 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
 
           {/* NET GRAND TOTAL */}
           <div className="thermal-grand-total">
-            <div className="grand-total-label">
-              <span>{t.grandTotal}</span>
-            </div>
-            <div className="grand-total-value">
-              {formatMoney(sale.total)}
-            </div>
+            <span className="grand-total-label">{t.grandTotal}</span>
+            <span className="grand-total-value">{formatMoney(sale.total)}</span>
           </div>
+
+          <div className="thermal-summary-row">
+            <span>{t.totalQty}</span>
+            <span>{totalItemQty.toFixed(2)}</span>
+          </div>
+
+          {bSettings.showPaymentMethod && (
+            <div className="thermal-summary-row">
+              <span>{paymentLabel(sale.paymentMethod, t)}</span>
+              <span>{formatMoney(sale.total)}</span>
+            </div>
+          )}
+
+          {sale.paymentMethod === 'Cash' && sale.amountReceived > 0 && (
+            <>
+              <div className="thermal-summary-row">
+                <span>{t.amountReceived}</span>
+                <span>{formatMoney(sale.amountReceived)}</span>
+              </div>
+              {sale.change > 0 && (
+                <div className="thermal-summary-row change-row">
+                  <span>{t.change}</span>
+                  <strong>{formatMoney(sale.change)}</strong>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* 5. PAYMENT BREAKDOWN */}
-        {bSettings.showPaymentMethod && (
-          <div className="thermal-payment-block" style={{ marginTop: '6px' }}>
-            <div className="thermal-summary-row">
-              <span>{t.paymentMethod}</span>
-              <strong>{paymentLabel(sale.paymentMethod, t)}</strong>
+        {/* 5. CUSTOMER CREDIT DETAILS IF CREDIT SALE */}
+        {sale.paymentMethod === 'Credit' && (
+          <>
+            <div className="thermal-divider-dashed" />
+            <div className="thermal-credit-details">
+              <div className="thermal-credit-title">
+                {activeLang === 'si' ? 'CUSTOMER CREDIT DETAILS / ණය විස්තර :' : 'CUSTOMER CREDIT DETAILS :'}
+              </div>
+              <div className="thermal-summary-row" style={{ fontWeight: 600 }}>
+                <span>Outstanding Due :</span>
+                <span>{formatMoney(sale.total)}</span>
+              </div>
             </div>
-
-            {sale.paymentMethod === 'Cash' && (
-              <>
-                <div className="thermal-summary-row">
-                  <span>{t.amountReceived}</span>
-                  <span>{formatMoney(sale.amountReceived || sale.total)}</span>
-                </div>
-                {sale.change > 0 && (
-                  <div className="thermal-summary-row change-row">
-                    <span>{t.change}</span>
-                    <strong className="change-amount">{formatMoney(sale.change)}</strong>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          </>
         )}
 
+        <div className="thermal-divider-dashed" />
+
         {/* 6. CLEAN FOOTER */}
-        <footer className="thermal-footer" style={{ marginTop: '10px' }}>
+        <footer className="thermal-footer">
           {activeLang === 'si' ? (
             <>
               <p className="footer-line">{t.defaultFooterLine1}</p>
@@ -482,14 +521,18 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
               </p>
             ))
           ) : (
-            <>
-              <p className="footer-line">{t.defaultFooterLine1}</p>
-              <p className="footer-line" style={{ marginTop: '2px' }}>{t.defaultFooterLine2}</p>
-            </>
+            <p className="footer-line">{t.defaultFooterLine1}</p>
           )}
         </footer>
 
-        {/* 7. THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
+        <div className="thermal-divider-dashed" />
+
+        {/* 7. SOFTWARE BRANDING */}
+        <div className="thermal-software-credit">
+          Software By : AJ POS
+        </div>
+
+        {/* 8. THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
         <div className="receipt-cut-space" />
       </section>
     </div>
