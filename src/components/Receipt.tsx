@@ -492,9 +492,13 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
               <div className="thermal-credit-title">
                 {activeLang === 'si' ? 'CUSTOMER CREDIT DETAILS / ණය විස්තර :' : 'CUSTOMER CREDIT DETAILS :'}
               </div>
-              <div className="thermal-summary-row" style={{ fontWeight: 600 }}>
+              <div className="thermal-summary-row">
                 <span>Outstanding Due :</span>
                 <span>{formatMoney(sale.total)}</span>
+              </div>
+              <div className="thermal-previous-due-block">
+                <div className="previous-due-label">Previous Due</div>
+                <div className="previous-due-val">0.00</div>
               </div>
             </div>
           </>
