@@ -375,7 +375,7 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
 
           <div className="thermal-items-list">
             {sale.items.map((item, index) => {
-              const displayName = item.code ? `${item.code} - ${item.productName}` : item.productName
+              const displayName = (item.productName || '').replace(/^\d+\s*-\s*/, '').trim() || item.productName
               const calcText =
                 item.productType === 'chicken'
                   ? `${weightLabel(item.weightGrams || 0)} × ${formatMoney(item.pricePerKg || 0)}`
