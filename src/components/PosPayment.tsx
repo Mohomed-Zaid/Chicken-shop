@@ -210,7 +210,7 @@ function PosLiveHeader() {
     <header className="pos-top-header">
       <div className="pos-header-brand">
         <span className="pos-brand-tag">POS</span>
-        <span className="pos-brand-title">Chicken Kade & Grocery</span>
+        <span className="pos-brand-title">Chicken Kade</span>
       </div>
 
       <div className="pos-header-center">

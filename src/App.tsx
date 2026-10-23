@@ -28,6 +28,7 @@ import { getProducts, saveProducts, saveSingleProduct, deleteProduct } from './s
 import { getChickenCuts, saveChickenCuts, saveChickenPriceHistory } from './services/supabase/chickenService'
 import { fetchSalesFromSupabase } from './services/supabase/salesService'
 import { fetchCustomersFromSupabase, fetchCustomerPaymentsFromSupabase } from './services/supabase/customerService'
+import { getBusinessSettings, type BusinessSettingsRow } from './services/supabase/settingsService'
 import { customerStore, customerPaymentStore } from './data/customers'
 import './index.css'
 
@@ -65,19 +66,58 @@ export default function App() {
     return () => window.removeEventListener('data_reset', handleDataReset)
   }, [])
 
-  // Synchronize products, chicken cuts, and sales with Supabase on start
+  // Synchronize products, chicken cuts, sales, and store details with Supabase/Neon on start
   useEffect(() => {
     if (!isAuthenticated || !storageAdapter.isSupabase()) return
 
+    // Immediately purge any stale default Colombo addresses from browser cache
+    try {
+      const rawBS = localStorage.getItem('business-settings')
+      if (rawBS && (rawBS.toLowerCase().includes('colombo') || rawBS.includes('123 Main'))) {
+        localStorage.removeItem('business-settings')
+      }
+      const rawBS2 = localStorage.getItem('business_settings')
+      if (rawBS2 && (rawBS2.toLowerCase().includes('colombo') || rawBS2.includes('123 Main'))) {
+        localStorage.removeItem('business_settings')
+      }
+    } catch {}
+
     const initData = async () => {
       try {
-        const [cloudProducts, cloudCuts, cloudSales, cloudCustomers, cloudPayments] = await Promise.all([
+        const [cloudProducts, cloudCuts, cloudSales, cloudCustomers, cloudPayments, cloudSettings] = await Promise.all([
           getProducts().catch(() => [] as GroceryProduct[]),
           getChickenCuts().catch(() => [] as ChickenItem[]),
           fetchSalesFromSupabase().catch(() => [] as any[]),
           fetchCustomersFromSupabase().catch(() => [] as any[]),
           fetchCustomerPaymentsFromSupabase().catch(() => [] as any[]),
+          getBusinessSettings().catch(() => [] as BusinessSettingsRow[]),
         ])
+
+        if (cloudSettings && cloudSettings.length > 0) {
+          const s = cloudSettings[0]
+          const finalAddress = (s.address && !s.address.toLowerCase().includes('colombo') && !s.address.includes('123 Main')) ? s.address : '24 Kandy Road, Gelioya'
+          const finalPhone = (s.phone && !s.phone.includes('726 2600')) ? s.phone : '0812311333'
+          const cleanedSettings = {
+            ...s,
+            business_name: s.business_name || 'CHICKEN KADE',
+            address: finalAddress,
+            phone: finalPhone,
+          }
+          storageAdapter.writeLocal('business_settings', cleanedSettings)
+          try {
+            localStorage.setItem('business-settings', JSON.stringify({
+              businessName: cleanedSettings.business_name,
+              address: cleanedSettings.address,
+              phone: cleanedSettings.phone,
+              email: cleanedSettings.email,
+              footerMessage: cleanedSettings.footer_message,
+              autoPrintReceipt: cleanedSettings.auto_print_receipt,
+              showCustomer: cleanedSettings.show_customer,
+              showCashier: cleanedSettings.show_cashier,
+              showPaymentMethod: cleanedSettings.show_payment_method,
+            }))
+          } catch {}
+        }
 
         if (cloudCustomers && cloudCustomers.length > 0) {
           const localCusts = customerStore.getCustomers()

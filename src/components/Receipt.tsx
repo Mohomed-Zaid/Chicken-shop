@@ -17,9 +17,9 @@ export type ReceiptSettings = {
 }
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
-  businessName: 'Chicken Kade & Grocery',
-  address: '123 Main Street, Colombo, Sri Lanka',
-  phone: '+94 77 726 2600',
+  businessName: 'CHICKEN KADE',
+  address: '24 Kandy Road, Gelioya',
+  phone: '0812311333',
   email: 'info@chickenkade.lk',
   footerMessage: 'Thank you for shopping with us! Please come again.\nමිලදී ගැනීම සඳහා ස්තූතියි! නැවත පැමිණෙන්න.',
   showCustomer: true,
@@ -30,15 +30,23 @@ export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
 
 const DEFAULT_SETTINGS = DEFAULT_RECEIPT_SETTINGS
 
+function isStaleColombo(addr?: string | null): boolean {
+  if (!addr) return false
+  const lower = addr.toLowerCase()
+  return lower.includes('colombo') || lower.includes('123 main street')
+}
+
 export function loadReceiptSettings(): ReceiptSettings {
   // 1. Try modern storageAdapter / Supabase cached row
   try {
     const cached = storageAdapter.readLocal<BusinessSettingsRow | null>('business_settings', null)
     if (cached) {
+      const address = isStaleColombo(cached.address) ? DEFAULT_SETTINGS.address : (cached.address || DEFAULT_SETTINGS.address)
+      const phone = (cached.phone && !cached.phone.includes('726 2600')) ? cached.phone : DEFAULT_SETTINGS.phone
       return {
         businessName: cached.business_name || DEFAULT_SETTINGS.businessName,
-        address: cached.address || DEFAULT_SETTINGS.address,
-        phone: cached.phone || DEFAULT_SETTINGS.phone,
+        address,
+        phone,
         email: cached.email || DEFAULT_SETTINGS.email,
         footerMessage: cached.footer_message || DEFAULT_SETTINGS.footerMessage,
         showCustomer: cached.show_customer ?? true,
@@ -56,10 +64,12 @@ export function loadReceiptSettings(): ReceiptSettings {
     const raw = localStorage.getItem('business-settings')
     if (raw) {
       const parsed = JSON.parse(raw)
+      const address = isStaleColombo(parsed.address) ? DEFAULT_SETTINGS.address : (parsed.address || DEFAULT_SETTINGS.address)
+      const phone = (parsed.phone && !parsed.phone.includes('726 2600')) ? parsed.phone : DEFAULT_SETTINGS.phone
       return {
         businessName: parsed.businessName || parsed.name || DEFAULT_SETTINGS.businessName,
-        address: parsed.address || DEFAULT_SETTINGS.address,
-        phone: parsed.phone || DEFAULT_SETTINGS.phone,
+        address,
+        phone,
         email: parsed.email || DEFAULT_SETTINGS.email,
         footerMessage: parsed.footerMessage || DEFAULT_SETTINGS.footerMessage,
         showCustomer: parsed.showCustomer ?? true,
@@ -266,18 +276,34 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
         .then(rows => {
           if (!mounted || !rows || rows.length === 0) return
           const row = rows[0]
-          setBSettings(prev => ({
-            ...prev,
-            businessName: row.business_name || prev.businessName,
-            address: row.address || prev.address,
-            phone: row.phone || prev.phone,
-            email: row.email || prev.email,
-            footerMessage: row.footer_message || prev.footerMessage,
-            showCustomer: row.show_customer ?? prev.showCustomer,
-            showCashier: row.show_cashier ?? prev.showCashier,
-            showPaymentMethod: row.show_payment_method ?? prev.showPaymentMethod,
-            autoPrintReceipt: row.auto_print_receipt ?? prev.autoPrintReceipt,
-          }))
+          const finalAddress = isStaleColombo(row.address) ? DEFAULT_SETTINGS.address : (row.address || DEFAULT_SETTINGS.address)
+          const finalPhone = (row.phone && !row.phone.includes('726 2600')) ? row.phone : DEFAULT_SETTINGS.phone
+          const next = {
+            businessName: row.business_name || DEFAULT_SETTINGS.businessName,
+            address: finalAddress,
+            phone: finalPhone,
+            email: row.email || DEFAULT_SETTINGS.email,
+            footerMessage: row.footer_message || DEFAULT_SETTINGS.footerMessage,
+            showCustomer: row.show_customer ?? true,
+            showCashier: row.show_cashier ?? true,
+            showPaymentMethod: row.show_payment_method ?? true,
+            autoPrintReceipt: row.auto_print_receipt ?? false,
+          }
+          storageAdapter.writeLocal('business_settings', { ...row, address: finalAddress, phone: finalPhone })
+          try {
+            localStorage.setItem('business-settings', JSON.stringify({
+              businessName: next.businessName,
+              address: next.address,
+              phone: next.phone,
+              email: next.email,
+              footerMessage: next.footerMessage,
+              autoPrintReceipt: next.autoPrintReceipt,
+              showCustomer: next.showCustomer,
+              showCashier: next.showCashier,
+              showPaymentMethod: next.showPaymentMethod,
+            }))
+          } catch {}
+          setBSettings(next)
         })
         .catch(() => { })
     }

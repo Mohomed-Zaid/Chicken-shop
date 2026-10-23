@@ -11,11 +11,11 @@ export function Settings() {
 
   const [settings, setSettings] = useState<BusinessSettingsRow>({
     id: 'default',
-    business_name: 'Chicken Kade & Grocery',
-    address: '123 Main Street, Colombo, Sri Lanka',
-    phone: '077 123 4567',
+    business_name: 'CHICKEN KADE',
+    address: '24 Kandy Road, Gelioya',
+    phone: '0812311333',
     email: 'info@chickenkade.lk',
-    footer_message: 'Thank you for your business! Please come again.',
+    footer_message: 'Thank you for shopping with us! Please come again.',
     show_customer: true,
     show_cashier: true,
     show_payment_method: true,
@@ -42,18 +42,25 @@ export function Settings() {
 
   useEffect(() => {
     let mounted = true
+    const sanitize = (r: BusinessSettingsRow): BusinessSettingsRow => ({
+      ...r,
+      business_name: r.business_name || 'CHICKEN KADE',
+      address: (r.address && !r.address.toLowerCase().includes('colombo') && !r.address.includes('123 Main')) ? r.address : '24 Kandy Road, Gelioya',
+      phone: (r.phone && !r.phone.includes('726 2600')) ? r.phone : '0812311333',
+    })
+
     if (storageAdapter.isSupabase()) {
       getBusinessSettings()
         .then(rows => {
           if (!mounted) return
           if (rows && rows.length > 0) {
-            setSettings(rows[0])
+            setSettings(sanitize(rows[0]))
           }
         })
         .catch(err => console.error('Failed to load business settings:', err))
     } else {
       const cached = storageAdapter.readLocal<BusinessSettingsRow | null>('business_settings', null)
-      if (cached) setSettings(cached)
+      if (cached) setSettings(sanitize(cached))
     }
     return () => {
       mounted = false
