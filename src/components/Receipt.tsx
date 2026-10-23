@@ -92,33 +92,38 @@ export function getReceiptStrings(lang: ReceiptLanguage = 'si') {
   if (lang === 'si') {
     return {
       phonePrefix: '',
-      invoiceNo: 'BILL NO :',
-      date: 'DateTime :',
+      invoiceNo: 'බිල්පත් අංකය :',
+      date: 'දිනය / වේලාව :',
       sellingMode: 'විකුණුම් මාදිලිය :',
-      wholesale: 'තොග විකිණුම් (WHOLESALE)',
-      wholesaleTag: 'තොග මිල (WHOLESALE)',
-      packTag: 'පැකේජ් මිල (PACK)',
-      packApplied: 'පැකේජ් මිල යොදන ලදී (Pack Pricing)',
-      cashier: 'Cashier :',
-      customer: 'Name :',
-      item: 'DESCRIPTION',
+      wholesale: 'තොග විකිණුම්',
+      wholesaleTag: 'තොග මිල',
+      packTag: 'පැකේජ් මිල',
+      packApplied: 'පැකේජ් මිල යොදන ලදී',
+      cashier: 'අයකැමි :',
+      customer: 'නම :',
+      customerInfo: 'පාරිභෝගික තොරතුරු',
+      customerPhone: 'දුරකථන :',
+      item: 'විස්තරය',
       qtyPrice: 'ප්‍රමාණය × මිල',
-      total: 'TOTAL',
-      free: 'FREE',
-      totalQty: 'Items Qty :',
-      subtotal: 'SubTotal :',
-      discount: 'Discount :',
-      tax: 'Tax :',
-      grandTotal: 'Grand Total :',
-      paymentMethod: 'Payment :',
-      paymentCash: 'CASH :',
-      paymentCard: 'CARD :',
-      paymentCredit: 'CREDIT :',
-      paymentOther: 'OTHER :',
-      amountReceived: 'Received :',
-      change: 'Change :',
-      defaultFooterLine1: 'Thank you. Please Visit Again.',
-      defaultFooterLine2: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
+      total: 'එකතුව',
+      free: 'නොමිලේ',
+      totalQty: 'අයිතම ගණන :',
+      subtotal: 'උප එකතුව :',
+      discount: 'වට්ටම :',
+      tax: 'බදු :',
+      grandTotal: 'මුළු මුදල :',
+      paymentMethod: 'ගෙවීම් ක්‍රමය :',
+      paymentCash: 'මුදල් (CASH) :',
+      paymentCard: 'කාඩ්පත් (CARD) :',
+      paymentCredit: 'ණය (CREDIT) :',
+      paymentOther: 'වෙනත් :',
+      amountReceived: 'ලැබුණු මුදල :',
+      change: 'ඉතිරි මුදල :',
+      customerCreditDetails: 'පාරිභෝගික ණය විස්තර :',
+      outstandingDue: 'ගෙවිය යුතු මුදල :',
+      previousDue: 'පෙර හිඟ මුදල',
+      defaultFooterLine1: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
+      defaultFooterLine2: 'නැවත පැමිණෙන්න.',
     }
   }
 
@@ -134,22 +139,27 @@ export function getReceiptStrings(lang: ReceiptLanguage = 'si') {
       packApplied: 'Pack Pricing (පැකේජ් මිල)',
       cashier: 'Cashier / අයකැමි :',
       customer: 'Name / නම :',
-      item: 'DESCRIPTION',
+      customerInfo: 'CUSTOMER INFORMATION / පාරිභෝගික තොරතුරු',
+      customerPhone: 'Phone / දුරකථන :',
+      item: 'DESCRIPTION / විස්තරය',
       qtyPrice: 'Qty × Rate',
-      total: 'TOTAL',
+      total: 'TOTAL / එකතුව',
       free: 'FREE / නොමිලේ',
-      totalQty: 'Items Qty :',
-      subtotal: 'SubTotal :',
-      discount: 'Discount :',
-      tax: 'Tax :',
-      grandTotal: 'Grand Total :',
-      paymentMethod: 'Payment :',
-      paymentCash: 'CASH :',
-      paymentCard: 'CARD :',
-      paymentCredit: 'CREDIT :',
-      paymentOther: 'OTHER :',
-      amountReceived: 'Received :',
-      change: 'Change :',
+      totalQty: 'Items Qty / අයිතම :',
+      subtotal: 'SubTotal / උප එකතුව :',
+      discount: 'Discount / වට්ටම :',
+      tax: 'Tax / බදු :',
+      grandTotal: 'Grand Total / මුළු මුදල :',
+      paymentMethod: 'Payment / ගෙවීම් :',
+      paymentCash: 'CASH / මුදල් :',
+      paymentCard: 'CARD / කාඩ්පත් :',
+      paymentCredit: 'CREDIT / ණය :',
+      paymentOther: 'OTHER / වෙනත් :',
+      amountReceived: 'Received / ලැබුණු :',
+      change: 'Change / ඉතිරි :',
+      customerCreditDetails: 'CUSTOMER CREDIT DETAILS / ණය විස්තර :',
+      outstandingDue: 'Outstanding Due / හිඟ මුදල :',
+      previousDue: 'Previous Due / පෙර හිඟය',
       defaultFooterLine1: 'Thank you. Please Visit Again.',
       defaultFooterLine2: 'මිලදී ගැනීම සඳහා ස්තූතියි!',
     }
@@ -167,6 +177,8 @@ export function getReceiptStrings(lang: ReceiptLanguage = 'si') {
     packApplied: 'Pack Pricing Applied',
     cashier: 'Cashier :',
     customer: 'Name :',
+    customerInfo: 'CUSTOMER INFORMATION',
+    customerPhone: 'Phone :',
     item: 'DESCRIPTION',
     qtyPrice: 'Qty × Rate',
     total: 'TOTAL',
@@ -183,6 +195,9 @@ export function getReceiptStrings(lang: ReceiptLanguage = 'si') {
     paymentOther: 'OTHER :',
     amountReceived: 'Received :',
     change: 'Change :',
+    customerCreditDetails: 'CUSTOMER CREDIT DETAILS :',
+    outstandingDue: 'Outstanding Due :',
+    previousDue: 'Previous Due',
     defaultFooterLine1: 'Thank you. Please Visit Again.',
     defaultFooterLine2: '',
   }
@@ -371,7 +386,7 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
           {bSettings.showCustomer && sale.customerName && sale.customerName !== 'Walk-in Customer' && (
             <div className="thermal-customer-box">
               <div className="thermal-customer-title">
-                {activeLang === 'si' ? 'CUSTOMER INFORMATION / පාරිභෝගික තොරතුරු' : 'CUSTOMER INFORMATION'}
+                {t.customerInfo}
               </div>
               <div className="thermal-meta-row">
                 <span className="meta-label">{t.customer}</span>
@@ -379,7 +394,7 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
               </div>
               {customerPhone && (
                 <div className="thermal-meta-row">
-                  <span className="meta-label">Phone :</span>
+                  <span className="meta-label">{t.customerPhone}</span>
                   <span className="meta-value">{customerPhone}</span>
                 </div>
               )}
@@ -490,14 +505,14 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
             <div className="thermal-divider-dashed" />
             <div className="thermal-credit-details">
               <div className="thermal-credit-title">
-                {activeLang === 'si' ? 'CUSTOMER CREDIT DETAILS / ණය විස්තර :' : 'CUSTOMER CREDIT DETAILS :'}
+                {t.customerCreditDetails}
               </div>
               <div className="thermal-summary-row">
-                <span>Outstanding Due :</span>
+                <span>{t.outstandingDue}</span>
                 <span>{formatMoney(sale.total)}</span>
               </div>
               <div className="thermal-previous-due-block">
-                <div className="previous-due-label">Previous Due</div>
+                <div className="previous-due-label">{t.previousDue}</div>
                 <div className="previous-due-val">0.00</div>
               </div>
             </div>
@@ -529,14 +544,7 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
           )}
         </footer>
 
-        <div className="thermal-divider-dashed" />
-
-        {/* 7. SOFTWARE BRANDING */}
-        <div className="thermal-software-credit">
-          Software By : AJ POS
-        </div>
-
-        {/* 8. THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
+        {/* 7. THERMAL PAPER CUTTER CLEARANCE FEED SPACE (12mm) */}
         <div className="receipt-cut-space" />
       </section>
     </div>
