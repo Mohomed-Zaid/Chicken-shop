@@ -7672,6 +7672,10 @@ button {
     text-shadow: none !important;
   }
 
+  .thermal-logo {
+    display: none !important;
+  }
+
   /* Force horizontal flex layout during browser printing */
   .thermal-meta-row,
   .thermal-items-header,

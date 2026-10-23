@@ -277,7 +277,6 @@ export function BarcodeSvg({ text }: { text: string }) {
 
 export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLanguage }) {
   const [bSettings, setBSettings] = useState<ReceiptSettings>(loadReceiptSettings)
-  const [logoError, setLogoError] = useState(false)
   const activeLang: ReceiptLanguage = language || (localStorage.getItem('receipt_language') as ReceiptLanguage) || 'si'
   const t = getReceiptStrings(activeLang)
 
@@ -344,14 +343,6 @@ export function Receipt({ sale, language }: { sale: Sale; language?: ReceiptLang
       <section className="receipt thermal-80mm">
         {/* 1. STORE HEADER */}
         <header className="thermal-header">
-          {!logoError && (
-            <img
-              src="/logo2.jpeg"
-              alt="Logo"
-              className="thermal-logo"
-              onError={() => setLogoError(true)}
-            />
-          )}
           <h1 className="thermal-business-name">{bSettings.businessName}</h1>
           <div className="thermal-business-info">
             {bSettings.address && <div>{bSettings.address}</div>}
@@ -611,6 +602,7 @@ export function ReceiptPreview({
                 <style>
                   @page { size: auto; margin: 0; }
                   * { box-sizing: border-box; margin: 0; padding: 0; color: #000000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                  img, .thermal-logo { display: none !important; }
                   body { margin: 0 auto; padding: 2mm 3mm; width: 100%; max-width: 80mm; font-family: 'Noto Sans Sinhala', 'Iskoola Pota', 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; }
                   .thermal-divider-dashed { border: none; border-top: 1px dashed #444444; margin: 6px 0; width: 100%; display: block; }
                   .thermal-business-name { font-size: 16px; font-weight: 600; text-align: center; text-transform: uppercase; margin-bottom: 2px; }
