@@ -581,7 +581,7 @@ export function ReceiptPreview({
 
   const executePrint = useCallback(() => {
     // 1. Try dedicated isolated iframe printing (ensures only receipt is sent, no parent web UI interference)
-    const printArea = document.getElementById('receipt-printable-area') || document.getElementById('receipt-preview-area')
+    const printArea = document.getElementById('receipt-preview-area') || document.getElementById('receipt-printable-area')
     if (printArea) {
       try {
         let iframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement | null

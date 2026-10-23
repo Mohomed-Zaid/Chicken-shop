@@ -7461,9 +7461,14 @@ button {
   }
 }
 
-/* Screen: hide dedicated print-only elements */
+/* Screen: pre-render print-only container off-screen so Chrome computes layout before print */
 .thermal-print-only {
-  display: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 72mm !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* ==========================================================================
@@ -7583,6 +7588,8 @@ button {
     display: block !important;
     visibility: visible !important;
     position: static !important;
+    left: auto !important;
+    top: auto !important;
     width: 72mm !important;
     max-width: 72mm !important;
     margin: 0 auto !important;
