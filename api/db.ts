@@ -9,15 +9,15 @@ connectionString = connectionString.replace('-pooler.c-7.', '.c-7.')
 
 const rawSql = neon(connectionString)
 
-async function queryWithRetry(queryText: string, params: any[] = [], maxRetries = 2): Promise<any[]> {
+async function queryWithRetry(queryText: string, params: any[] = [], maxRetries = 3): Promise<any[]> {
   let lastError: any = null
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await rawSql.query(queryText, params)
     } catch (err: any) {
       lastError = err
-      const msg = err?.message || String(err)
-      console.warn(`Database query attempt ${attempt + 1} failed: ${msg}`)
+      const msg = (err?.message || String(err)).toLowerCase()
+      console.warn(`Database query attempt ${attempt + 1} failed: ${err?.message || String(err)}`)
       if (
         attempt < maxRetries &&
         (msg.includes('fetch failed') ||
@@ -25,9 +25,12 @@ async function queryWithRetry(queryText: string, params: any[] = [], maxRetries 
           msg.includes('timeout') ||
           msg.includes('connection') ||
           msg.includes('socket') ||
-          msg.includes('ECONNRESET'))
+          msg.includes('econnreset') ||
+          msg.includes('terminated') ||
+          msg.includes('closed') ||
+          msg.includes('57p01'))
       ) {
-        await new Promise(r => setTimeout(r, 700 * (attempt + 1)))
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1)))
       } else {
         break
       }

@@ -53,32 +53,49 @@ class QueryBuilder<T = any> implements PromiseLike<{ data: T[] | T | null; error
   }
 
   async execute(): Promise<{ data: any; error: any }> {
-    try {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('neon-auth-token') || ''}`,
-        },
-        body: JSON.stringify(this.options),
-      })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('neon-auth-token') || ''}`,
+          },
+          body: JSON.stringify(this.options),
+        })
 
-      if (!res.ok) {
-        const text = await res.text()
-        return { data: null, error: new Error(text || 'Network request failed') }
+        if (!res.ok) {
+          if (attempt === 0 && (res.status === 500 || res.status === 502 || res.status === 503)) {
+            await new Promise(r => setTimeout(r, 500))
+            continue
+          }
+          const text = await res.text()
+          return { data: null, error: new Error(text || 'Network request failed') }
+        }
+
+        const json = await res.json()
+        if (json.error) {
+          if (attempt === 0 && typeof json.error === 'object' && json.error?.message?.includes('terminated')) {
+            await new Promise(r => setTimeout(r, 500))
+            continue
+          }
+          return { data: null, error: json.error }
+        }
+
+        let data = json.data
+        if (this.isSingle && Array.isArray(data)) {
+          data = data[0] || null
+        }
+        return { data, error: null }
+      } catch (err: any) {
+        if (attempt === 0) {
+          await new Promise(r => setTimeout(r, 500))
+          continue
+        }
+        return { data: null, error: err }
       }
-
-      const json = await res.json()
-      if (json.error) return { data: null, error: json.error }
-
-      let data = json.data
-      if (this.isSingle && Array.isArray(data)) {
-        data = data[0] || null
-      }
-      return { data, error: null }
-    } catch (err: any) {
-      return { data: null, error: err }
     }
+    return { data: null, error: new Error('Request failed after retry') }
   }
 
   then<TResult1 = { data: any; error: any }, TResult2 = never>(
