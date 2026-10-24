@@ -1238,10 +1238,13 @@ export function PosPayment({
   const [mobilePosTab, setMobilePosTab] = useState<'catalog' | 'cart'>('catalog')
   const [selected, setSelected] = useState<ChickenItem | null>(null)
   const [grams, setGrams] = useState('')
+  const [weightInputMode, setWeightInputMode] = useState<'weight' | 'price'>('weight')
+  const [priceInput, setPriceInput] = useState('')
   const [rateInput, setRateInput] = useState('')
   const [isCustomRateApplied, setIsCustomRateApplied] = useState(false)
   const [savePermanently, setSavePermanently] = useState(false)
   const weightInputRef = useRef<HTMLInputElement>(null)
+  const priceInputRef = useRef<HTMLInputElement>(null)
   const [cart, setCart] = useState<Cart[]>([])
   const [scan, setScan] = useState('')
   const [search, setSearch] = useState('')
@@ -1501,6 +1504,8 @@ export function PosPayment({
   const openChickenModal = (item: ChickenItem) => {
     setSelected(item)
     setGrams('')
+    setPriceInput('')
+    setWeightInputMode('weight')
     const def =
       sellingMode === 'WHOLESALE' && item.wholesalePricePerKg !== undefined && item.wholesalePricePerKg !== null && item.wholesalePricePerKg > 0
         ? item.wholesalePricePerKg
@@ -1513,6 +1518,8 @@ export function PosPayment({
   const closeChickenModal = () => {
     setSelected(null)
     setGrams('')
+    setPriceInput('')
+    setWeightInputMode('weight')
     setRateInput('')
     setIsCustomRateApplied(false)
     setSavePermanently(false)
@@ -1541,7 +1548,12 @@ export function PosPayment({
     ? parsedCustomRate
     : defaultRate
 
-  const addChicken = (weightGrams: number, forcePriceType?: PriceType, customPricePerKg?: number) => {
+  const addChicken = (
+    weightGrams: number,
+    forcePriceType?: PriceType,
+    customPricePerKg?: number,
+    explicitTotal?: number
+  ) => {
     if (!selected) return
     const parsedWeight = Number(weightGrams)
     if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
@@ -1561,7 +1573,9 @@ export function PosPayment({
         ? customPricePerKg
         : (isWholesale ? (selected.wholesalePricePerKg || selected.pricePerKg) : selected.pricePerKg)
     const priceType: PriceType = isWholesale ? 'WHOLESALE' : 'RETAIL'
-    const total = calculateChickenPrice(parsedWeight, effectivePricePerKg)
+    const total = explicitTotal !== undefined && explicitTotal > 0
+      ? explicitTotal
+      : calculateChickenPrice(parsedWeight, effectivePricePerKg)
 
     if (savePermanently && selected && isCustomRateValid) {
       const nextItems = chickenItems.map(it => {
@@ -2756,8 +2770,19 @@ export function PosPayment({
       })
   }, [chickenItems, cleanChickenSearch])
 
-  const selectedWeight = parseWeightInGrams(grams)
-  const customEstimated = selected && selectedWeight ? calculateChickenPrice(selectedWeight, selectedEffectiveRate) : 0
+  const targetPriceNumber = parseFloat(priceInput)
+  const isTargetPriceValid = weightInputMode === 'price' && Number.isFinite(targetPriceNumber) && targetPriceNumber > 0
+  const calculatedGramsFromPrice = isTargetPriceValid && selectedEffectiveRate > 0
+    ? Math.max(1, Math.round((targetPriceNumber / selectedEffectiveRate) * 1000))
+    : null
+
+  const selectedWeight = weightInputMode === 'price'
+    ? calculatedGramsFromPrice
+    : parseWeightInGrams(grams)
+
+  const customEstimated = selected && selectedWeight
+    ? (isTargetPriceValid ? targetPriceNumber : calculateChickenPrice(selectedWeight, selectedEffectiveRate))
+    : 0
 
   const reset = () => {
     setCompleted(null)
@@ -3757,12 +3782,20 @@ export function PosPayment({
             className="dialog custom-dialog weight-modal-dialog"
             onSubmit={event => {
               event.preventDefault()
-              const parsed = parseWeightInGrams(grams)
-              if (!parsed) {
-                setNotice('Please enter a valid weight.')
-                return
+              if (weightInputMode === 'price') {
+                if (!isTargetPriceValid || !calculatedGramsFromPrice) {
+                  setNotice('Please enter a valid price / amount in Rs.')
+                  return
+                }
+                addChicken(calculatedGramsFromPrice, undefined, selectedEffectiveRate, targetPriceNumber)
+              } else {
+                const parsed = parseWeightInGrams(grams)
+                if (!parsed) {
+                  setNotice('Please enter a valid weight.')
+                  return
+                }
+                addChicken(parsed, undefined, selectedEffectiveRate)
               }
-              addChicken(parsed, undefined, selectedEffectiveRate)
             }}
           >
             <header>
@@ -4149,34 +4182,188 @@ export function PosPayment({
                 </div>
               </div>
 
-              <label style={{ marginTop: '16px' }}>
-                ENTER CUSTOM WEIGHT (GRAMS OR KG)
-                <input
-                  ref={weightInputRef}
-                  autoFocus
-                  value={grams}
-                  onChange={event => setGrams(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      const parsed = parseWeightInGrams(grams)
-                      if (!parsed) {
-                        setNotice('Please enter a valid weight.')
-                        return
-                      }
-                      addChicken(parsed, undefined, selectedEffectiveRate)
-                    }
-                    if (event.key === 'Escape') {
-                      closeChickenModal()
-                    }
-                  }}
-                  inputMode="decimal"
-                  placeholder="e.g. .250 for 250g, 1 for 1kg, 1.5 for 1.5kg"
-                />
-                <span style={{ fontSize: '11px', color: '#8b9aa7', marginTop: '4px', display: 'block' }}>
-                  Type: <code>.250</code> = 250g, <code>1</code> = 1kg, <code>1.5</code> = 1.5kg (or grams e.g. <code>500</code>)
-                </span>
-              </label>
+              {/* INPUT MODE TOGGLE (BY WEIGHT vs BY PRICE) */}
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ margin: 0, fontWeight: 700, fontSize: '11px', letterSpacing: '0.5px' }}>
+                    {weightInputMode === 'price' ? 'ENTER TARGET PRICE / AMOUNT (Rs.)' : 'ENTER CUSTOM WEIGHT (GRAMS OR KG)'}
+                  </label>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: '#090e17',
+                      padding: '2px',
+                      borderRadius: '6px',
+                      border: '1px solid #334155',
+                      gap: '2px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeightInputMode('weight')
+                        setTimeout(() => weightInputRef.current?.focus(), 50)
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: weightInputMode === 'weight' ? '#0284c7' : 'transparent',
+                        color: weightInputMode === 'weight' ? '#ffffff' : '#94a3b8',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Type weight directly in kg or grams"
+                    >
+                      ⚖️ By Weight
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeightInputMode('price')
+                        setTimeout(() => priceInputRef.current?.focus(), 50)
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: weightInputMode === 'price' ? '#0284c7' : 'transparent',
+                        color: weightInputMode === 'price' ? '#ffffff' : '#94a3b8',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Type target money amount (e.g. Rs. 500) - auto converts to kg/grams"
+                    >
+                      💵 By Price (Rs.)
+                    </button>
+                  </div>
+                </div>
+
+                {weightInputMode === 'price' ? (
+                  <div>
+                    {/* QUICK PRICE PRESETS */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '6px', marginBottom: '8px' }}>
+                      {[100, 200, 250, 300, 500, 1000].map(amt => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => {
+                            setPriceInput(String(amt))
+                            priceInputRef.current?.focus()
+                          }}
+                          style={{
+                            padding: '6px 4px',
+                            background: priceInput === String(amt) ? '#0284c7' : '#1e293b',
+                            border: '1px solid ' + (priceInput === String(amt) ? '#38bdf8' : '#334155'),
+                            borderRadius: '5px',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Rs. {amt}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: '#94a3b8',
+                          fontSize: '14px',
+                          fontWeight: 800,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        Rs.
+                      </span>
+                      <input
+                        ref={priceInputRef}
+                        autoFocus
+                        value={priceInput}
+                        onChange={event => setPriceInput(event.target.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            if (!isTargetPriceValid || !calculatedGramsFromPrice) {
+                              setNotice('Please enter a valid price/amount.')
+                              return
+                            }
+                            addChicken(calculatedGramsFromPrice, undefined, selectedEffectiveRate, targetPriceNumber)
+                          }
+                          if (event.key === 'Escape') {
+                            closeChickenModal()
+                          }
+                        }}
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="e.g. 500 for Rs. 500 worth, 250 for Rs. 250"
+                        style={{
+                          width: '100%',
+                          paddingLeft: '40px',
+                          paddingRight: '12px',
+                          height: '42px',
+                          borderRadius: '6px',
+                          border: isTargetPriceValid ? '2px solid #38bdf8' : '1px solid #334155',
+                          background: '#090e17',
+                          color: '#f8fafc',
+                          fontSize: '16px',
+                          fontWeight: 800,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#8b9aa7', marginTop: '5px', display: 'block' }}>
+                      {isTargetPriceValid && calculatedGramsFromPrice ? (
+                        <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                          ✦ Rs. {targetPriceNumber} gives <strong>{formatWeightDisplay(calculatedGramsFromPrice)}</strong> at {formatMoney(selectedEffectiveRate)}/kg
+                        </span>
+                      ) : (
+                        'Type amount (e.g. 500) — system calculates exact kg/grams automatically'
+                      )}
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      ref={weightInputRef}
+                      autoFocus
+                      value={grams}
+                      onChange={event => setGrams(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          const parsed = parseWeightInGrams(grams)
+                          if (!parsed) {
+                            setNotice('Please enter a valid weight.')
+                            return
+                          }
+                          addChicken(parsed, undefined, selectedEffectiveRate)
+                        }
+                        if (event.key === 'Escape') {
+                          closeChickenModal()
+                        }
+                      }}
+                      inputMode="decimal"
+                      placeholder="e.g. .250 for 250g, 1 for 1kg, 1.5 for 1.5kg"
+                    />
+                    <span style={{ fontSize: '11px', color: '#8b9aa7', marginTop: '4px', display: 'block' }}>
+                      Type: <code>.250</code> = 250g, <code>1</code> = 1kg, <code>1.5</code> = 1.5kg (or grams e.g. <code>500</code>)
+                    </span>
+                  </div>
+                )}
+              </div>
 
               <div className="price-preview-card">
                 <div className="preview-row">
@@ -4215,8 +4402,11 @@ export function PosPayment({
                 </div>
               </div>
 
-              {!selectedWeight && grams.trim().length > 0 && (
+              {weightInputMode === 'weight' && !selectedWeight && grams.trim().length > 0 && (
                 <p className="validation">Please enter a valid positive weight.</p>
+              )}
+              {weightInputMode === 'price' && !isTargetPriceValid && priceInput.trim().length > 0 && (
+                <p className="validation">Please enter a valid positive amount in Rupees.</p>
               )}
             </div>
 
