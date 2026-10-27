@@ -1238,7 +1238,7 @@ export function PosPayment({
   const [mobilePosTab, setMobilePosTab] = useState<'catalog' | 'cart'>('catalog')
   const [selected, setSelected] = useState<ChickenItem | null>(null)
   const [grams, setGrams] = useState('')
-  const [weightInputMode, setWeightInputMode] = useState<'weight' | 'price'>('weight')
+  const [weightInputMode, setWeightInputMode] = useState<'weight' | 'price'>('price')
   const [priceInput, setPriceInput] = useState('')
   const [rateInput, setRateInput] = useState('')
   const [isCustomRateApplied, setIsCustomRateApplied] = useState(false)
@@ -1505,7 +1505,7 @@ export function PosPayment({
     setSelected(item)
     setGrams('')
     setPriceInput('')
-    setWeightInputMode('weight')
+    setWeightInputMode('price')
     const def =
       sellingMode === 'WHOLESALE' && item.wholesalePricePerKg !== undefined && item.wholesalePricePerKg !== null && item.wholesalePricePerKg > 0
         ? item.wholesalePricePerKg
@@ -1519,7 +1519,7 @@ export function PosPayment({
     setSelected(null)
     setGrams('')
     setPriceInput('')
-    setWeightInputMode('weight')
+    setWeightInputMode('price')
     setRateInput('')
     setIsCustomRateApplied(false)
     setSavePermanently(false)
@@ -3898,8 +3898,13 @@ export function PosPayment({
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        weightInputRef.current?.focus()
-                        weightInputRef.current?.select()
+                        if (weightInputMode === 'price') {
+                          priceInputRef.current?.focus()
+                          priceInputRef.current?.select()
+                        } else {
+                          weightInputRef.current?.focus()
+                          weightInputRef.current?.select()
+                        }
                       }
                     }}
                     placeholder={String(defaultRate)}
@@ -4201,27 +4206,6 @@ export function PosPayment({
                     <button
                       type="button"
                       onClick={() => {
-                        setWeightInputMode('weight')
-                        setTimeout(() => weightInputRef.current?.focus(), 50)
-                      }}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        background: weightInputMode === 'weight' ? '#0284c7' : 'transparent',
-                        color: weightInputMode === 'weight' ? '#ffffff' : '#94a3b8',
-                        transition: 'all 0.15s ease',
-                      }}
-                      title="Type weight directly in kg or grams"
-                    >
-                      ⚖️ By Weight
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
                         setWeightInputMode('price')
                         setTimeout(() => priceInputRef.current?.focus(), 50)
                       }}
@@ -4239,6 +4223,27 @@ export function PosPayment({
                       title="Type target money amount (e.g. Rs. 500) - auto converts to kg/grams"
                     >
                       💵 By Price (Rs.)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeightInputMode('weight')
+                        setTimeout(() => weightInputRef.current?.focus(), 50)
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: weightInputMode === 'weight' ? '#0284c7' : 'transparent',
+                        color: weightInputMode === 'weight' ? '#ffffff' : '#94a3b8',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Type weight directly in kg or grams"
+                    >
+                      ⚖️ By Weight (KG)
                     </button>
                   </div>
                 </div>
