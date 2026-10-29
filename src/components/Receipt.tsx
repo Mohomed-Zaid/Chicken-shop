@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { formatMoney } from '../data/chicken'
 import type { PaymentMethod, Sale } from '../data/records'
 import { storageAdapter } from '../services/storageAdapter'
@@ -570,7 +570,30 @@ export function ReceiptPreview({
     } catch {}
   }
 
+  // Keep latest close/newSale handlers available to the stable print callback
+  const closeRef = useRef(close)
+  const newSaleRef = useRef(newSale)
+  useEffect(() => {
+    closeRef.current = close
+    newSaleRef.current = newSale
+  }, [close, newSale])
+
+  // Automatically close the receipt preview once printing has finished
+  const finishAfterPrint = useCallback(() => {
+    setTimeout(() => {
+      if (newSaleRef.current) newSaleRef.current()
+      else closeRef.current()
+    }, 300)
+  }, [])
+
   const executePrint = useCallback(() => {
+    let finished = false
+    const finishOnce = () => {
+      if (finished) return
+      finished = true
+      finishAfterPrint()
+    }
+
     // 1. Try dedicated isolated iframe printing (ensures only receipt is sent, no parent web UI interference)
     const printArea = document.getElementById('receipt-preview-area') || document.getElementById('receipt-printable-area')
     if (printArea) {
@@ -639,12 +662,17 @@ export function ReceiptPreview({
           doc.close()
 
           setTimeout(() => {
+            const win = iframe?.contentWindow
             try {
-              iframe?.contentWindow?.focus()
-              iframe?.contentWindow?.print()
+              win?.addEventListener('afterprint', finishOnce, { once: true })
+              win?.focus()
+              win?.print() // blocks until the print dialog is closed
+              finishOnce()
             } catch {
+              window.addEventListener('afterprint', finishOnce, { once: true })
               window.focus()
               window.print()
+              finishOnce()
             }
           }, 150)
           return
@@ -656,12 +684,14 @@ export function ReceiptPreview({
 
     // 2. Fallback directly to window.print()
     try {
+      window.addEventListener('afterprint', finishOnce, { once: true })
       window.focus()
       window.print()
+      finishOnce()
     } catch (err) {
       console.error('Print trigger failed:', err)
     }
-  }, [])
+  }, [finishAfterPrint])
 
   // Auto trigger browser print if autoPrint is true, keeping modal mounted
   useEffect(() => {
