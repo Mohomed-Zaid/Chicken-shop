@@ -101,7 +101,7 @@ export async function getCurrentSubscription(businessId: string = DEFAULT_BUSINE
       p_business_id: businessId,
     })
 
-    if (!error && data && data.is_active) {
+    if (!error && data && data.effective_status) {
       try {
         localStorage.setItem('cached_subscription', JSON.stringify(data))
       } catch {}
@@ -115,23 +115,24 @@ export async function getCurrentSubscription(businessId: string = DEFAULT_BUSINE
     console.warn('Network or communication error during subscription check, checking cached status:', err)
   }
 
-  // Graceful offline fallback: if previously verified active and still within the expiry period
+  // Graceful offline fallback: check cached subscription if network is unreachable
   try {
     const rawCached = localStorage.getItem('cached_subscription')
     if (rawCached) {
       const cached = JSON.parse(rawCached)
-      if (cached && cached.expiry_date && cached.stored_status === 'active') {
+      if (cached && cached.expiry_date) {
         const now = new Date()
         const expiry = new Date(cached.expiry_date)
-        if (expiry.getTime() > now.getTime()) {
-          const days_remaining = Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (86400 * 1000)))
-          return {
-            ...cached,
-            days_remaining,
-            is_active: true,
-            effective_status: 'active',
-          } as SubscriptionData
-        }
+        const isSuspended = cached.stored_status === 'suspended'
+        const isExpired = expiry.getTime() <= now.getTime()
+        const effective_status: SubscriptionStatus = isSuspended ? 'suspended' : isExpired ? 'expired' : 'active'
+        const days_remaining = Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (86400 * 1000)))
+        return {
+          ...cached,
+          days_remaining,
+          is_active: effective_status === 'active',
+          effective_status,
+        } as SubscriptionData
       }
     }
   } catch {}
@@ -244,6 +245,9 @@ export async function activateSubscription(params?: {
   })
 
   if (error) throw new Error(error.message || 'Failed to activate subscription.')
+  try {
+    localStorage.setItem('cached_subscription', JSON.stringify(data))
+  } catch {}
   return data as SubscriptionData
 }
 
@@ -315,6 +319,9 @@ export async function renewSubscription(params?: {
   })
 
   if (error) throw new Error(error.message || 'Failed to renew subscription.')
+  try {
+    localStorage.setItem('cached_subscription', JSON.stringify(data))
+  } catch {}
   return data as SubscriptionData
 }
 
@@ -351,6 +358,9 @@ export async function suspendSubscription(businessId: string = DEFAULT_BUSINESS_
   })
 
   if (error) throw new Error(error.message || 'Failed to suspend subscription.')
+  try {
+    localStorage.setItem('cached_subscription', JSON.stringify(data))
+  } catch {}
   return data as SubscriptionData
 }
 
@@ -395,6 +405,9 @@ export async function reactivateSubscription(businessId: string = DEFAULT_BUSINE
   })
 
   if (error) throw new Error(error.message || 'Failed to reactivate subscription.')
+  try {
+    localStorage.setItem('cached_subscription', JSON.stringify(data))
+  } catch {}
   return data as SubscriptionData
 }
 

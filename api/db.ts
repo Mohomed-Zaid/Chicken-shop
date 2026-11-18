@@ -366,20 +366,34 @@ export default async function handler(req: any, res: any) {
           updated_at: sub?.updated_at ? new Date(sub.updated_at).toISOString() : now.toISOString(),
         }
       } else if (fn === 'renew_subscription' || fn === 'activate_subscription' || fn === 'reactivate_subscription') {
+        const durationDays = Number(body.args?.p_duration_days) || 30
+        const businessName = body.args?.p_business_name || 'Chicken Kade & Grocery'
+        const existingRows: any[] = await sql.query('SELECT * FROM subscriptions ORDER BY created_at DESC LIMIT 1;')
+        const existing = existingRows[0]
         const now = new Date()
-        const expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        await sql.query(`
-          UPDATE subscriptions 
-          SET status = 'active', start_date = $1, expiry_date = $2, updated_at = now()
-          WHERE business_id = 'default-business';
-        `, [now.toISOString(), expiry.toISOString()])
+        const oldExpiry = existing?.expiry_date ? new Date(existing.expiry_date) : now
+        const baseDate = (fn === 'renew_subscription' && existing?.status === 'active' && oldExpiry > now) ? oldExpiry : now
+        const expiry = new Date(baseDate.getTime() + durationDays * 24 * 60 * 60 * 1000)
+
+        if (existing) {
+          await sql.query(`
+            UPDATE subscriptions 
+            SET status = 'active', business_name = $1, start_date = $2, expiry_date = $3, updated_at = now()
+            WHERE id = $4;
+          `, [businessName, now.toISOString(), expiry.toISOString(), existing.id])
+        } else {
+          await sql.query(`
+            INSERT INTO subscriptions (id, business_id, business_name, plan, status, start_date, expiry_date, created_at, updated_at)
+            VALUES (gen_random_uuid(), 'default-business', $1, '30_days', 'active', $2, $3, now(), now());
+          `, [businessName, now.toISOString(), expiry.toISOString()])
+        }
 
         const seconds_remaining = Math.floor((expiry.getTime() - now.getTime()) / 1000)
         const days_remaining = Math.ceil(seconds_remaining / 86400)
         rpcResult = {
-          id: 'sub-1',
+          id: existing?.id || 'sub-1',
           business_id: 'default-business',
-          business_name: 'Chicken Kade & Grocery',
+          business_name: businessName,
           plan: '30_days',
           start_date: now.toISOString(),
           expiry_date: expiry.toISOString(),

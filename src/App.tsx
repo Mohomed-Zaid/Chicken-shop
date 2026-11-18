@@ -252,8 +252,10 @@ export default function App() {
     )
   }
 
-  // Full-screen lock if subscription is expired, suspended, or unverified
-  if (!isActive) {
+  const isSuperAdmin = profile?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
+
+  // Full-screen lock if subscription is expired, suspended, or unverified (Super Admin always bypasses lock)
+  if (!isActive && !isSuperAdmin) {
     return <SubscriptionLock />
   }
 

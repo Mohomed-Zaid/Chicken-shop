@@ -135,13 +135,13 @@ export function SubscriptionLock() {
         </div>
 
         <div className="lock-actions">
-          {isUnverified ? (
-            <button className="confirm btn-lock-primary" onClick={() => checkSubscription()} disabled={processing}>
-              {processing ? 'Checking...' : 'Retry Server Verification'}
-            </button>
-          ) : isSuperAdmin ? (
+          {isSuperAdmin ? (
             <button className="confirm btn-lock-primary" onClick={() => setShowAdminModal(true)} disabled={processing}>
               {processing ? 'Processing...' : 'Renew Subscription (Admin)'}
+            </button>
+          ) : isUnverified ? (
+            <button className="confirm btn-lock-primary" onClick={() => checkSubscription()} disabled={processing}>
+              {processing ? 'Checking...' : 'Retry Server Verification'}
             </button>
           ) : (
             <button className="confirm btn-lock-primary" onClick={() => setShowContactModal(true)}>

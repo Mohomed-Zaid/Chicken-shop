@@ -146,40 +146,66 @@ export const neonClient = {
   },
 
   async rpc(fn: string, args?: Record<string, any>) {
-    try {
-      const res = await fetch('/api/db', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('neon-auth-token') || ''}`,
-        },
-        body: JSON.stringify({ action: 'rpc', fn, args }),
-      })
-      const json = await safeJson(res)
-      if (!res.ok || json.error) {
-        return { data: null, error: new Error(json.error?.message || json.error || `RPC ${fn} failed`) }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('neon-auth-token') || ''}`,
+          },
+          body: JSON.stringify({ action: 'rpc', fn, args }),
+        })
+        if (!res.ok && attempt === 0 && (res.status === 500 || res.status === 502 || res.status === 503)) {
+          await new Promise(r => setTimeout(r, 500))
+          continue
+        }
+        const json = await safeJson(res)
+        if (!res.ok || json.error) {
+          return { data: null, error: new Error(json.error?.message || json.error || `RPC ${fn} failed`) }
+        }
+        return json
+      } catch (err: any) {
+        if (attempt === 0) {
+          await new Promise(r => setTimeout(r, 500))
+          continue
+        }
+        return { data: null, error: err }
       }
-      return json
-    } catch (err: any) {
-      return { data: null, error: err }
     }
+    return { data: null, error: new Error(`RPC ${fn} failed after retry`) }
   },
 
   auth: {
     async signInWithPassword({ email, password }: { email: string; password: string }) {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', email, password }),
-      })
-      const json = await safeJson(res)
-      if (!res.ok || json.error) {
-        return { data: { user: null, session: null }, error: new Error(json.error || 'Login failed') }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login', email, password }),
+          })
+          if (!res.ok && attempt === 0 && (res.status === 500 || res.status === 502 || res.status === 503)) {
+            await new Promise(r => setTimeout(r, 600))
+            continue
+          }
+          const json = await safeJson(res)
+          if (!res.ok || json.error) {
+            return { data: { user: null, session: null }, error: new Error(json.error || 'Login failed') }
+          }
+          localStorage.setItem('neon-auth-token', json.session.access_token)
+          localStorage.setItem('neon-auth-user', JSON.stringify(json.user))
+          window.dispatchEvent(new CustomEvent('auth-changed', { detail: json.session }))
+          return { data: json, error: null }
+        } catch (err: any) {
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 600))
+            continue
+          }
+          return { data: { user: null, session: null }, error: err }
+        }
       }
-      localStorage.setItem('neon-auth-token', json.session.access_token)
-      localStorage.setItem('neon-auth-user', JSON.stringify(json.user))
-      window.dispatchEvent(new CustomEvent('auth-changed', { detail: json.session }))
-      return { data: json, error: null }
+      return { data: { user: null, session: null }, error: new Error('Login failed after retry') }
     },
 
     async signOut() {

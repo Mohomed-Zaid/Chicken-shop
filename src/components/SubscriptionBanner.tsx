@@ -13,20 +13,22 @@ const formatDate = (iso: string | null | undefined) => {
 }
 
 export function SubscriptionBanner() {
-  const { isActive, daysRemaining, renew, startDate, expiryDate } = useSubscription()
+  const { isActive, status, daysRemaining, renew, reactivate, startDate, expiryDate } = useSubscription()
   const { isAdmin, profile } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [renewing, setRenewing] = useState(false)
 
   const isSuperAdmin = profile?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
 
-  if (!isSuperAdmin || dismissed || !isActive || daysRemaining > 7) {
+  if (!isSuperAdmin || dismissed || (isActive && daysRemaining > 7)) {
     return null
   }
 
   const message =
-    daysRemaining <= 0
-      ? 'Your 30-day subscription expires today!'
+    status === 'suspended'
+      ? 'Store license is currently SUSPENDED (other accounts are locked out).'
+      : !isActive || daysRemaining <= 0
+      ? 'Store 30-day subscription has EXPIRED (other accounts are locked out). Renew to restore store access.'
       : daysRemaining === 1
       ? 'Your 30-day subscription expires tomorrow.'
       : `Your 30-day subscription expires in ${daysRemaining} days.`
@@ -34,7 +36,11 @@ export function SubscriptionBanner() {
   const handleRenew = async () => {
     setRenewing(true)
     try {
-      await renew(30)
+      if (status === 'suspended') {
+        await reactivate()
+      } else {
+        await renew(30)
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Renewal failed')
     } finally {
@@ -43,9 +49,9 @@ export function SubscriptionBanner() {
   }
 
   return (
-    <div className={`subscription-warning-banner no-print ${daysRemaining <= 2 ? 'urgent' : ''}`}>
+    <div className={`subscription-warning-banner no-print ${!isActive || daysRemaining <= 2 ? 'urgent' : ''}`}>
       <div className="banner-content">
-        <span className="banner-icon">⚠️</span>
+        <span className="banner-icon">{!isActive ? '🔒' : '⚠️'}</span>
         <div className="banner-text-group">
           <span className="banner-text">{message}</span>
           <span className="banner-dates">
@@ -54,9 +60,9 @@ export function SubscriptionBanner() {
         </div>
       </div>
       <div className="banner-actions">
-        {isAdmin && (
+        {(isAdmin || isSuperAdmin) && (
           <button className="banner-renew-btn" onClick={handleRenew} disabled={renewing}>
-            {renewing ? 'Renewing...' : 'Renew 30 Days'}
+            {renewing ? 'Processing...' : status === 'suspended' ? 'Reactivate License' : '⚡ Renew 30 Days'}
           </button>
         )}
         <button className="banner-close-btn" onClick={() => setDismissed(true)} title="Dismiss notice for now">
