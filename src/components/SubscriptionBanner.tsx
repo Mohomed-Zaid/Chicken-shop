@@ -28,10 +28,10 @@ export function SubscriptionBanner() {
     status === 'suspended'
       ? 'Store license is currently SUSPENDED (other accounts are locked out).'
       : !isActive || daysRemaining <= 0
-      ? 'Store 30-day subscription has EXPIRED (other accounts are locked out). Renew to restore store access.'
-      : daysRemaining === 1
-      ? 'Your 30-day subscription expires tomorrow.'
-      : `Your 30-day subscription expires in ${daysRemaining} days.`
+        ? 'Store 30-day subscription has EXPIRED (other accounts are locked out). Renew to restore store access.'
+        : daysRemaining === 1
+          ? 'Your 30-day subscription expires tomorrow.'
+          : `Your 30-day subscription expires in ${daysRemaining} days.`
 
   const handleRenew = async () => {
     setRenewing(true)
